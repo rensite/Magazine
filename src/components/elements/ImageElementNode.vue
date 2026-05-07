@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, inject, toRef } from 'vue'
+import { computed, inject } from 'vue'
 import type { ImageElement } from '@/types/element'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { useDragResize } from '@/composables/useDragResize'
 import { useCanvasPointer } from '@/composables/useCanvasPointer'
-import { ensureBox, toSvgTransform } from '@/utils/transform'
+import { ensureBox, toCssTransform } from '@/utils/transform'
 
 const props = defineProps<{ element: ImageElement }>()
 const store = useSpreadStore()
@@ -22,7 +22,7 @@ const resolve = (path: string | undefined): string => {
   return urlMap[path] ?? ''
 }
 
-const transform = computed(() => toSvgTransform(ensureBox(toRef(props, 'element').value)))
+const transform = computed(() => toCssTransform(ensureBox(props.element)))
 const href = computed(() => resolve(props.element.thumb) || resolve(props.element.src))
 
 const onPointerDown = (e: PointerEvent) => {
@@ -38,27 +38,41 @@ const onPointerDown = (e: PointerEvent) => {
 </script>
 
 <template>
-  <g
-    :transform="transform"
-    :opacity="props.element.opacity"
-    style="cursor: move"
+  <img
+    v-if="href"
+    :src="href"
+    :width="props.element.width"
+    :height="props.element.height"
+    :style="{
+      position: 'absolute',
+      left: '0px',
+      top: '0px',
+      transform,
+      transformOrigin: '0 0',
+      opacity: String(props.element.opacity),
+      cursor: 'move',
+      userSelect: 'none',
+      pointerEvents: 'auto',
+    }"
+    draggable="false"
     @pointerdown="onPointerDown"
-  >
-    <image
-      v-if="href"
-      :href="href"
-      :width="props.element.width"
-      :height="props.element.height"
-      preserveAspectRatio="xMidYMid slice"
-      :mask="props.element.maskId ? `url(#${props.element.maskId})` : undefined"
-    />
-    <rect
-      v-else
-      :width="props.element.width"
-      :height="props.element.height"
-      fill="#1d2026"
-      stroke="#3a3f49"
-      stroke-dasharray="4 4"
-    />
-  </g>
+    @dragstart.prevent
+  />
+  <div
+    v-else
+    :style="{
+      position: 'absolute',
+      left: '0px',
+      top: '0px',
+      width: `${props.element.width}px`,
+      height: `${props.element.height}px`,
+      transform,
+      transformOrigin: '0 0',
+      background: '#1d2026',
+      border: '1px dashed #3a3f49',
+      pointerEvents: 'auto',
+      cursor: 'move',
+    }"
+    @pointerdown="onPointerDown"
+  />
 </template>

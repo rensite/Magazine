@@ -4,8 +4,7 @@ import { useSpreadStore } from '@/stores/spreadStore'
 import { useViewport } from '@/composables/useViewport'
 import { EDITOR_CONTAINER_KEY } from '@/composables/useCanvasPointer'
 import { rightPageX, spreadCanvasSize } from '@/utils/elementFactory'
-import SvgLayer from './SvgLayer.vue'
-import HtmlLayer from './HtmlLayer.vue'
+import ElementsLayer from './ElementsLayer.vue'
 import OverlayLayer from './OverlayLayer.vue'
 import Guides from './Guides.vue'
 
@@ -84,8 +83,7 @@ const onCanvasPointerDown = (e: PointerEvent) => {
         :class="store.schema.background.type === 'paper' ? 'paper-texture' : ''"
         :style="{ left: `${rightX}px`, top: '0px', width: `${store.schema.pages.right.width}px`, height: `${store.schema.pages.right.height}px`, ...bgStyle }"
       />
-      <SvgLayer />
-      <HtmlLayer />
+      <ElementsLayer />
       <Guides />
       <OverlayLayer />
     </div>
