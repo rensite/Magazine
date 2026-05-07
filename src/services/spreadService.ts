@@ -2,7 +2,7 @@ import type { SpreadRecord, SpreadSchema, SpreadVersion } from '@/types/element'
 import { getSupabase } from './supabaseClient'
 
 export interface SpreadService {
-  list(): Promise<Pick<SpreadRecord, 'id' | 'title' | 'updated_at' | 'current_version'>[]>
+  list(): Promise<Pick<SpreadRecord, 'id' | 'title' | 'updated_at' | 'current_version' | 'schema'>[]>
   load(id: string): Promise<SpreadRecord>
   create(title: string, schema: SpreadSchema): Promise<SpreadRecord>
   rename(id: string, title: string): Promise<void>
@@ -18,7 +18,7 @@ export const supabaseSpreadService: SpreadService = {
   async list() {
     const { data, error } = await getSupabase()
       .from('spreads')
-      .select('id, title, updated_at, current_version')
+      .select('id, title, updated_at, current_version, schema')
       .order('updated_at', { ascending: false })
     if (error) throw error
     return data ?? []

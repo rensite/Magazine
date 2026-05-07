@@ -13,7 +13,7 @@ import { useImageUrls } from '@/composables/useImageUrls'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { cacheGet, isCacheNewer } from '@/services/localCache'
 import { emptySchema } from '@/utils/elementFactory'
-import type { SpreadRecord } from '@/types/element'
+import type { SpreadRecord, SpreadSchema } from '@/types/element'
 
 const store = useSpreadStore()
 const auth = useAuthStore()
@@ -31,6 +31,7 @@ interface SpreadSummary {
   title: string
   updated_at: string
   current_version: number
+  schema?: SpreadSchema | unknown
 }
 
 const spreads = ref<SpreadSummary[]>([])
