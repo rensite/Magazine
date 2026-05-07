@@ -1,6 +1,7 @@
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount } from 'vue'
 import type { ElementId, SpreadElement } from '@/types/element'
 import { useSpreadStore } from '@/stores/spreadStore'
+import { useCanvasPointer } from './useCanvasPointer'
 import { resizeBox, snapAngle, type HandleKey } from '@/utils/geometry'
 import { ensureBox, type Vec2 } from '@/utils/transform'
 
@@ -12,7 +13,6 @@ type Mode =
 interface BeginContext {
   id: ElementId
   pointer: Vec2
-  zoom: number
   shift: boolean
 }
 
@@ -23,9 +23,11 @@ const canvasDelta = (start: Vec2, current: Vec2): Vec2 => ({
 
 export const useDragResize = () => {
   const store = useSpreadStore()
+  const { screenToCanvas } = useCanvasPointer()
+
   let mode: Mode | null = null
   let activeId: ElementId | null = null
-  let escListener: ((e: KeyboardEvent) => void) | null = null
+  let listenersInstalled = false
 
   const lockSelection = () => {
     document.body.style.userSelect = 'none'
@@ -34,39 +36,7 @@ export const useDragResize = () => {
     document.body.style.userSelect = ''
   }
 
-  const beginDrag = (ctx: BeginContext) => {
-    const el = store.elements.find((e) => e.id === ctx.id)
-    if (!el) return
-    activeId = ctx.id
-    mode = { kind: 'drag', startEl: structuredClone(el), startPointer: ctx.pointer }
-    store.beginInteraction('drag')
-    lockSelection()
-    attachEsc()
-  }
-
-  const beginResize = (ctx: BeginContext, handle: HandleKey) => {
-    const el = store.elements.find((e) => e.id === ctx.id)
-    if (!el) return
-    activeId = ctx.id
-    mode = { kind: 'resize', startEl: structuredClone(el), startPointer: ctx.pointer, handle }
-    store.beginInteraction('resize')
-    lockSelection()
-    attachEsc()
-  }
-
-  const beginRotate = (ctx: BeginContext) => {
-    const el = store.elements.find((e) => e.id === ctx.id)
-    if (!el) return
-    activeId = ctx.id
-    const center: Vec2 = { x: el.x + el.width / 2, y: el.y + el.height / 2 }
-    const startAngle = (Math.atan2(ctx.pointer.y - center.y, ctx.pointer.x - center.x) * 180) / Math.PI
-    mode = { kind: 'rotate', startEl: structuredClone(el), center, startAngle }
-    store.beginInteraction('rotate')
-    lockSelection()
-    attachEsc()
-  }
-
-  const move = (pointer: Vec2, _zoom: number, shift: boolean) => {
+  const move = (pointer: Vec2, shift: boolean) => {
     if (!mode || !activeId) return
     const id = activeId
     if (mode.kind === 'drag') {
@@ -88,8 +58,6 @@ export const useDragResize = () => {
         if (i === -1) return
         const start = mode!.startEl
         if (start.type === 'text') {
-          // For text, only X dimension is user-controlled — height is auto from content.
-          // Resizing also flips the element to manual width mode.
           draft.elements[i] = {
             ...start,
             x: resized.x,
@@ -119,7 +87,7 @@ export const useDragResize = () => {
     mode = null
     activeId = null
     unlockSelection()
-    detachEsc()
+    removeListeners()
   }
 
   const cancel = () => {
@@ -128,45 +96,77 @@ export const useDragResize = () => {
     mode = null
     activeId = null
     unlockSelection()
-    detachEsc()
+    removeListeners()
   }
 
-  const attachEsc = () => {
-    if (escListener) return
-    escListener = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') cancel()
-    }
-    window.addEventListener('keydown', escListener)
+  const onWinMove = (e: PointerEvent) => {
+    if (!mode) return
+    const pos = screenToCanvas(e.clientX, e.clientY)
+    move(pos, e.shiftKey)
   }
-
-  const detachEsc = () => {
-    if (!escListener) return
-    window.removeEventListener('keydown', escListener)
-    escListener = null
-  }
-
-  // Safety: if pointer capture is lost (element unmounted mid-drag, devtools
-  // opened, alt-tab) the original pointerup may never fire. Watch the window
-  // and clean up any in-flight interaction on the next pointerup we observe.
-  const onWindowPointerUp = () => {
+  const onWinUp = () => {
     if (mode) end()
   }
-  const onWindowBlur = () => {
+  const onWinKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') cancel()
+  }
+  const onWinBlur = () => {
     if (mode) cancel()
   }
 
-  onMounted(() => {
-    window.addEventListener('pointerup', onWindowPointerUp)
-    window.addEventListener('pointercancel', onWindowPointerUp)
-    window.addEventListener('blur', onWindowBlur)
-  })
+  const installListeners = () => {
+    if (listenersInstalled) return
+    window.addEventListener('pointermove', onWinMove)
+    window.addEventListener('pointerup', onWinUp)
+    window.addEventListener('pointercancel', onWinUp)
+    window.addEventListener('keydown', onWinKey)
+    window.addEventListener('blur', onWinBlur)
+    listenersInstalled = true
+  }
+  const removeListeners = () => {
+    if (!listenersInstalled) return
+    window.removeEventListener('pointermove', onWinMove)
+    window.removeEventListener('pointerup', onWinUp)
+    window.removeEventListener('pointercancel', onWinUp)
+    window.removeEventListener('keydown', onWinKey)
+    window.removeEventListener('blur', onWinBlur)
+    listenersInstalled = false
+  }
 
-  onBeforeUnmount(() => {
-    window.removeEventListener('pointerup', onWindowPointerUp)
-    window.removeEventListener('pointercancel', onWindowPointerUp)
-    window.removeEventListener('blur', onWindowBlur)
-    detachEsc()
-  })
+  const beginDrag = (ctx: BeginContext) => {
+    const el = store.elements.find((e) => e.id === ctx.id)
+    if (!el) return
+    activeId = ctx.id
+    mode = { kind: 'drag', startEl: structuredClone(el), startPointer: ctx.pointer }
+    store.beginInteraction('drag')
+    lockSelection()
+    installListeners()
+  }
 
-  return { beginDrag, beginResize, beginRotate, move, end, cancel }
+  const beginResize = (ctx: BeginContext, handle: HandleKey) => {
+    const el = store.elements.find((e) => e.id === ctx.id)
+    if (!el) return
+    activeId = ctx.id
+    mode = { kind: 'resize', startEl: structuredClone(el), startPointer: ctx.pointer, handle }
+    store.beginInteraction('resize')
+    lockSelection()
+    installListeners()
+  }
+
+  const beginRotate = (ctx: BeginContext) => {
+    const el = store.elements.find((e) => e.id === ctx.id)
+    if (!el) return
+    activeId = ctx.id
+    const center: Vec2 = { x: el.x + el.width / 2, y: el.y + el.height / 2 }
+    const startAngle =
+      (Math.atan2(ctx.pointer.y - center.y, ctx.pointer.x - center.x) * 180) / Math.PI
+    mode = { kind: 'rotate', startEl: structuredClone(el), center, startAngle }
+    store.beginInteraction('rotate')
+    lockSelection()
+    installListeners()
+  }
+
+  onBeforeUnmount(removeListeners)
+
+  return { beginDrag, beginResize, beginRotate, end, cancel }
 }

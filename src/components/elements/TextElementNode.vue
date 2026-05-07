@@ -88,25 +88,14 @@ watch(
 
 const onPointerDown = (e: PointerEvent) => {
   if (editing.value) return
+  e.preventDefault()
   e.stopPropagation()
   store.select(props.element.id)
-  ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   drag.beginDrag({
     id: props.element.id,
     pointer: pointerPos(e),
-    zoom: store.zoom,
     shift: e.shiftKey,
   })
-}
-
-const onPointerMove = (e: PointerEvent) => {
-  if (e.buttons === 0 || editing.value) return
-  drag.move(pointerPos(e), store.zoom, e.shiftKey)
-}
-
-const onPointerUp = (e: PointerEvent) => {
-  ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
-  drag.end()
 }
 
 const onDblClick = () => {
@@ -145,8 +134,6 @@ const onBlur = () => {
     :style="styleObj"
     :contenteditable="editing"
     @pointerdown="onPointerDown"
-    @pointermove="onPointerMove"
-    @pointerup="onPointerUp"
     @dblclick="onDblClick"
     @input="onInput"
     @blur="onBlur"

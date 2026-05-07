@@ -41,31 +41,32 @@ const rotateHandlePos = computed(() => ({
 const startResize = (e: PointerEvent, key: HandleKey) => {
   e.preventDefault()
   e.stopPropagation()
-  ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   interacting.value = true
   drag.beginResize(
-    { id: props.element.id, pointer: pointerPos(e), zoom: store.zoom, shift: e.shiftKey },
+    { id: props.element.id, pointer: pointerPos(e), shift: e.shiftKey },
     key,
   )
+  attachResetOnUp()
 }
 
 const startRotate = (e: PointerEvent) => {
   e.preventDefault()
   e.stopPropagation()
-  ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   interacting.value = true
-  drag.beginRotate({ id: props.element.id, pointer: pointerPos(e), zoom: store.zoom, shift: e.shiftKey })
+  drag.beginRotate({ id: props.element.id, pointer: pointerPos(e), shift: e.shiftKey })
+  attachResetOnUp()
 }
 
-const onMove = (e: PointerEvent) => {
-  if (e.buttons === 0) return
-  drag.move(pointerPos(e), store.zoom, e.shiftKey)
-}
-
-const onUp = (e: PointerEvent) => {
-  ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
-  drag.end()
-  interacting.value = false
+const attachResetOnUp = () => {
+  const reset = () => {
+    interacting.value = false
+    window.removeEventListener('pointerup', reset)
+    window.removeEventListener('pointercancel', reset)
+    window.removeEventListener('blur', reset)
+  }
+  window.addEventListener('pointerup', reset)
+  window.addEventListener('pointercancel', reset)
+  window.addEventListener('blur', reset)
 }
 
 const onRotateDoubleClick = (e: MouseEvent) => {
@@ -108,8 +109,6 @@ const rotateCursor =
       @pointerenter="hoveringHandle = true"
       @pointerleave="hoveringHandle = false"
       @pointerdown="(e) => startResize(e, hd.key)"
-      @pointermove="onMove"
-      @pointerup="onUp"
       @dblclick="onResizeDoubleClick"
     />
 
@@ -123,8 +122,6 @@ const rotateCursor =
       @pointerenter="hoveringHandle = true"
       @pointerleave="hoveringHandle = false"
       @pointerdown="startRotate"
-      @pointermove="onMove"
-      @pointerup="onUp"
       @dblclick="onRotateDoubleClick"
     />
   </g>
