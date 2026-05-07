@@ -4,10 +4,12 @@ import type { TextElement } from '@/types/element'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { useElementTransform } from '@/composables/useElementTransform'
 import { useDragResize } from '@/composables/useDragResize'
+import { useCanvasPointer } from '@/composables/useCanvasPointer'
 
 const props = defineProps<{ element: TextElement }>()
 const store = useSpreadStore()
 const drag = useDragResize()
+const { pointerPos } = useCanvasPointer()
 const editing = ref(false)
 const rootRef = ref<HTMLDivElement | null>(null)
 
@@ -84,19 +86,6 @@ watch(
   () => requestAnimationFrame(measure),
 )
 
-const containerRect = (e: PointerEvent): DOMRect => {
-  const layer = (e.currentTarget as HTMLElement).closest('.absolute.inset-0')
-  return (layer ?? (e.currentTarget as HTMLElement)).getBoundingClientRect()
-}
-
-const screenToCanvas = (e: PointerEvent) => {
-  const rect = containerRect(e)
-  return {
-    x: (e.clientX - rect.left) / store.zoom,
-    y: (e.clientY - rect.top) / store.zoom,
-  }
-}
-
 const onPointerDown = (e: PointerEvent) => {
   if (editing.value) return
   e.stopPropagation()
@@ -104,7 +93,7 @@ const onPointerDown = (e: PointerEvent) => {
   ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   drag.beginDrag({
     id: props.element.id,
-    pointer: screenToCanvas(e),
+    pointer: pointerPos(e),
     zoom: store.zoom,
     shift: e.shiftKey,
   })
@@ -112,7 +101,7 @@ const onPointerDown = (e: PointerEvent) => {
 
 const onPointerMove = (e: PointerEvent) => {
   if (e.buttons === 0 || editing.value) return
-  drag.move(screenToCanvas(e), store.zoom, e.shiftKey)
+  drag.move(pointerPos(e), store.zoom, e.shiftKey)
 }
 
 const onPointerUp = (e: PointerEvent) => {

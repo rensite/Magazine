@@ -3,61 +3,40 @@ import { computed, ref } from 'vue'
 import type { SpreadElement } from '@/types/element'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { useDragResize } from '@/composables/useDragResize'
-import { toSvgTransform, ensureBox, type Vec2 } from '@/utils/transform'
+import { useCanvasPointer } from '@/composables/useCanvasPointer'
+import { toSvgTransform, ensureBox } from '@/utils/transform'
 import type { HandleKey } from '@/utils/geometry'
 
 const props = defineProps<{ element: SpreadElement }>()
 const store = useSpreadStore()
 const drag = useDragResize()
+const { pointerPos } = useCanvasPointer()
 const isText = computed(() => props.element.type === 'text')
 
 const transform = computed(() => toSvgTransform(ensureBox(props.element)))
 const handleSize = computed(() => 10 / store.zoom)
 const stroke = computed(() => 1.5 / store.zoom)
-const rotateZoneSize = computed(() => 18 / store.zoom)
-const rotateZoneOffset = computed(() => 9 / store.zoom)
 
 const hoveringHandle = ref(false)
 const interacting = ref(false)
 const showFrame = computed(() => hoveringHandle.value || interacting.value)
 
-interface Handle { x: number; y: number; key: HandleKey; cursor: string }
+interface ResizeHandle { x: number; y: number; key: HandleKey; cursor: string }
 
-const handles = computed<Handle[]>(() => {
+const resizeHandles = computed<ResizeHandle[]>(() => {
   const w = props.element.width
   const h = props.element.height
   return [
     { x: 0, y: 0, key: 'nw', cursor: 'nwse-resize' },
-    { x: w, y: 0, key: 'ne', cursor: 'nesw-resize' },
     { x: 0, y: h, key: 'sw', cursor: 'nesw-resize' },
     { x: w, y: h, key: 'se', cursor: 'nwse-resize' },
   ]
 })
 
-interface RotateZone { x: number; y: number }
-
-const rotateZones = computed<RotateZone[]>(() => {
-  const w = props.element.width
-  const h = props.element.height
-  const o = rotateZoneOffset.value
-  return [
-    { x: -o, y: -o },
-    { x: w - o, y: -o },
-    { x: -o, y: h - o },
-    { x: w - o, y: h - o },
-  ]
-})
-
-const pointerPos = (e: PointerEvent): Vec2 => {
-  const svg = (e.currentTarget as SVGElement).ownerSVGElement!
-  const pt = svg.createSVGPoint()
-  pt.x = e.clientX
-  pt.y = e.clientY
-  const ctm = svg.getScreenCTM()
-  if (!ctm) return { x: e.clientX, y: e.clientY }
-  const local = pt.matrixTransform(ctm.inverse())
-  return { x: local.x, y: local.y }
-}
+const rotateHandlePos = computed(() => ({
+  x: props.element.width,
+  y: 0,
+}))
 
 const startResize = (e: PointerEvent, key: HandleKey) => {
   e.preventDefault()
@@ -94,7 +73,7 @@ const onRotateDoubleClick = (e: MouseEvent) => {
   store.resetRotation(props.element.id)
 }
 
-const onSideHandleDoubleClick = (e: MouseEvent) => {
+const onResizeDoubleClick = (e: MouseEvent) => {
   if (!isText.value) return
   e.stopPropagation()
   store.updateElement(props.element.id, { autoWidth: true })
@@ -118,24 +97,7 @@ const rotateCursor =
     />
 
     <rect
-      v-for="(z, i) in rotateZones"
-      :key="`rz-${i}`"
-      :x="z.x"
-      :y="z.y"
-      :width="rotateZoneSize"
-      :height="rotateZoneSize"
-      fill="transparent"
-      :style="{ cursor: rotateCursor }"
-      @pointerenter="hoveringHandle = true"
-      @pointerleave="hoveringHandle = false"
-      @pointerdown="startRotate"
-      @pointermove="onMove"
-      @pointerup="onUp"
-      @dblclick="onRotateDoubleClick"
-    />
-
-    <rect
-      v-for="hd in handles"
+      v-for="hd in resizeHandles"
       :key="hd.key"
       class="handle"
       :x="hd.x - handleSize / 2"
@@ -148,7 +110,22 @@ const rotateCursor =
       @pointerdown="(e) => startResize(e, hd.key)"
       @pointermove="onMove"
       @pointerup="onUp"
-      @dblclick="onSideHandleDoubleClick"
+      @dblclick="onResizeDoubleClick"
+    />
+
+    <rect
+      class="handle"
+      :x="rotateHandlePos.x - handleSize / 2"
+      :y="rotateHandlePos.y - handleSize / 2"
+      :width="handleSize"
+      :height="handleSize"
+      :style="{ cursor: rotateCursor, fill: '#d4a85f' }"
+      @pointerenter="hoveringHandle = true"
+      @pointerleave="hoveringHandle = false"
+      @pointerdown="startRotate"
+      @pointermove="onMove"
+      @pointerup="onUp"
+      @dblclick="onRotateDoubleClick"
     />
   </g>
 </template>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, provide, ref } from 'vue'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { useViewport } from '@/composables/useViewport'
+import { EDITOR_CONTAINER_KEY } from '@/composables/useCanvasPointer'
 import { rightPageX, spreadCanvasSize } from '@/utils/elementFactory'
 import SvgLayer from './SvgLayer.vue'
 import HtmlLayer from './HtmlLayer.vue'
@@ -10,6 +11,7 @@ import Guides from './Guides.vue'
 
 const store = useSpreadStore()
 const containerRef = ref<HTMLDivElement | null>(null)
+provide(EDITOR_CONTAINER_KEY, containerRef)
 const vp = useViewport(containerRef)
 
 const canvas = computed(() => spreadCanvasSize(store.schema))

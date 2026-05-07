@@ -16,9 +16,9 @@ interface BeginContext {
   shift: boolean
 }
 
-const screenDelta = (start: Vec2, current: Vec2, zoom: number): Vec2 => ({
-  x: (current.x - start.x) / zoom,
-  y: (current.y - start.y) / zoom,
+const canvasDelta = (start: Vec2, current: Vec2): Vec2 => ({
+  x: current.x - start.x,
+  y: current.y - start.y,
 })
 
 export const useDragResize = () => {
@@ -66,11 +66,11 @@ export const useDragResize = () => {
     attachEsc()
   }
 
-  const move = (pointer: Vec2, zoom: number, shift: boolean) => {
+  const move = (pointer: Vec2, _zoom: number, shift: boolean) => {
     if (!mode || !activeId) return
     const id = activeId
     if (mode.kind === 'drag') {
-      const d = screenDelta(mode.startPointer, pointer, zoom)
+      const d = canvasDelta(mode.startPointer, pointer)
       const next = {
         ...mode.startEl,
         x: mode.startEl.x + d.x,
@@ -81,7 +81,7 @@ export const useDragResize = () => {
         if (i !== -1) draft.elements[i] = next
       })
     } else if (mode.kind === 'resize') {
-      const d = screenDelta(mode.startPointer, pointer, zoom)
+      const d = canvasDelta(mode.startPointer, pointer)
       const resized = resizeBox(ensureBox(mode.startEl), mode.handle, d.x, d.y, shift)
       store.updateInteraction((draft) => {
         const i = draft.elements.findIndex((e) => e.id === id)

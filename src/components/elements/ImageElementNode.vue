@@ -3,11 +3,13 @@ import { computed, inject, toRef } from 'vue'
 import type { ImageElement } from '@/types/element'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { useDragResize } from '@/composables/useDragResize'
+import { useCanvasPointer } from '@/composables/useCanvasPointer'
 import { ensureBox, toSvgTransform } from '@/utils/transform'
 
 const props = defineProps<{ element: ImageElement }>()
 const store = useSpreadStore()
 const drag = useDragResize()
+const { pointerPos } = useCanvasPointer()
 
 const urlMap = inject<Record<string, string>>('imageUrls', {})
 
@@ -22,17 +24,6 @@ const resolve = (path: string | undefined): string => {
 
 const transform = computed(() => toSvgTransform(ensureBox(toRef(props, 'element').value)))
 const href = computed(() => resolve(props.element.thumb) || resolve(props.element.src))
-
-const pointerPos = (e: PointerEvent) => {
-  const svg = (e.currentTarget as SVGElement).ownerSVGElement!
-  const pt = svg.createSVGPoint()
-  pt.x = e.clientX
-  pt.y = e.clientY
-  const ctm = svg.getScreenCTM()
-  if (!ctm) return { x: e.clientX, y: e.clientY }
-  const local = pt.matrixTransform(ctm.inverse())
-  return { x: local.x, y: local.y }
-}
 
 const onPointerDown = (e: PointerEvent) => {
   e.stopPropagation()
