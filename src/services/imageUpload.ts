@@ -10,6 +10,19 @@ export interface UploadedImage {
 const MAX_FULL = 2000
 const MAX_THUMB = 300
 
+const ALPHA_TYPES = new Set(['image/png', 'image/webp', 'image/gif', 'image/svg+xml'])
+
+interface OutputFormat {
+  mime: string
+  ext: string
+  quality: number
+}
+
+const pickFormat = (file: File): OutputFormat => {
+  if (ALPHA_TYPES.has(file.type)) return { mime: 'image/png', ext: 'png', quality: 1 }
+  return { mime: 'image/jpeg', ext: 'jpg', quality: 0.9 }
+}
+
 const loadImage = (file: File | Blob): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
@@ -35,8 +48,7 @@ interface ResizedRaster {
 const resize = async (
   img: HTMLImageElement,
   maxLong: number,
-  type = 'image/jpeg',
-  quality = 0.9,
+  format: OutputFormat,
 ): Promise<ResizedRaster> => {
   const longest = Math.max(img.naturalWidth, img.naturalHeight)
   const scale = longest > maxLong ? maxLong / longest : 1
@@ -47,12 +59,13 @@ const resize = async (
   canvas.height = h
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('canvas 2d context unavailable')
+  ctx.clearRect(0, 0, w, h)
   ctx.drawImage(img, 0, 0, w, h)
   const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, type, quality),
+    canvas.toBlob(resolve, format.mime, format.quality),
   )
   if (!blob) throw new Error('canvas toBlob returned null')
-  return { blob, dataUrl: canvas.toDataURL(type, quality), width: w, height: h }
+  return { blob, dataUrl: canvas.toDataURL(format.mime, format.quality), width: w, height: h }
 }
 
 /**
@@ -61,14 +74,34 @@ const resize = async (
  * Note: data URLs in JSONB make schemas heavy — replace with `uploadImage`
  * once auth is set up.
  */
+const isSvg = (file: File): boolean => file.type === 'image/svg+xml'
+
+const fileToDataUrl = (file: File | Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'))
+    reader.readAsDataURL(file)
+  })
+
 export const prepareLocalImage = async (file: File): Promise<UploadedImage> => {
   if (!file.type.startsWith('image/')) {
     throw new Error(`Not an image: ${file.type}`)
   }
   const img = await loadImage(file)
+  if (isSvg(file)) {
+    const dataUrl = await fileToDataUrl(file)
+    return {
+      src: dataUrl,
+      thumb: dataUrl,
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+    }
+  }
+  const format = pickFormat(file)
   const [full, thumb] = await Promise.all([
-    resize(img, MAX_FULL),
-    resize(img, MAX_THUMB),
+    resize(img, MAX_FULL, format),
+    resize(img, MAX_THUMB, format),
   ])
   return {
     src: full.dataUrl,
@@ -88,19 +121,36 @@ export const uploadImage = async (
   }
 
   const img = await loadImage(file)
-  const [full, thumb] = await Promise.all([
-    resize(img, MAX_FULL),
-    resize(img, MAX_THUMB),
-  ])
-
   const id = crypto.randomUUID()
-  const fullPath = `${userId}/${spreadId}/${id}.jpg`
-  const thumbPath = `${userId}/${spreadId}/${id}_thumb.jpg`
   const storage = getSupabase().storage.from(ASSETS_BUCKET)
 
+  if (isSvg(file)) {
+    const path = `${userId}/${spreadId}/${id}.svg`
+    const res = await storage.upload(path, file, {
+      contentType: 'image/svg+xml',
+      upsert: false,
+    })
+    if (res.error) throw res.error
+    return {
+      src: path,
+      thumb: path,
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+    }
+  }
+
+  const format = pickFormat(file)
+  const [full, thumb] = await Promise.all([
+    resize(img, MAX_FULL, format),
+    resize(img, MAX_THUMB, format),
+  ])
+
+  const fullPath = `${userId}/${spreadId}/${id}.${format.ext}`
+  const thumbPath = `${userId}/${spreadId}/${id}_thumb.${format.ext}`
+
   const [fullRes, thumbRes] = await Promise.all([
-    storage.upload(fullPath, full.blob, { contentType: 'image/jpeg', upsert: false }),
-    storage.upload(thumbPath, thumb.blob, { contentType: 'image/jpeg', upsert: false }),
+    storage.upload(fullPath, full.blob, { contentType: format.mime, upsert: false }),
+    storage.upload(thumbPath, thumb.blob, { contentType: format.mime, upsert: false }),
   ])
   if (fullRes.error) throw fullRes.error
   if (thumbRes.error) throw thumbRes.error
