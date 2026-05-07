@@ -9,6 +9,8 @@ interface CacheEntry {
 
 const key = (spreadId: string) => `spread:${spreadId}`
 
+const toPlain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
 export const cacheGet = (spreadId: string): Promise<CacheEntry | undefined> =>
   get<CacheEntry>(key(spreadId))
 
@@ -18,7 +20,7 @@ export const cachePut = async (
   syncedAt: number | null = null,
 ): Promise<void> => {
   await set(key(spreadId), {
-    schema,
+    schema: toPlain(schema),
     savedAt: Date.now(),
     syncedAt,
   } satisfies CacheEntry)
