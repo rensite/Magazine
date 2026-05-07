@@ -115,8 +115,12 @@ export const useSpreadStore = defineStore('spread', {
       const [, patches, inverse] = produceWithPatches(initial, (d) => {
         d.elements = final.elements
         d.background = final.background
-        d.pageWidth = final.pageWidth
-        d.pageHeight = final.pageHeight
+        d.pages = final.pages
+        d.gutter = final.gutter
+        d.units = final.units
+        d.orientation = final.orientation
+        d.mirrorPages = final.mirrorPages
+        d.showGuides = final.showGuides
       })
       if (patches.length > 0) {
         this.past.push({ patches, inverse, label })

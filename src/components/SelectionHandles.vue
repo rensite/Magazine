@@ -82,12 +82,12 @@ const onUp = (e: PointerEvent) => {
   interacting.value = false
 }
 
-const onRotateDoubleClick = (e: PointerEvent) => {
+const onRotateDoubleClick = (e: MouseEvent) => {
   e.stopPropagation()
   store.resetRotation(props.element.id)
 }
 
-const onSideHandleDoubleClick = (e: PointerEvent) => {
+const onSideHandleDoubleClick = (e: MouseEvent) => {
   if (!isText.value) return
   e.stopPropagation()
   store.updateElement(props.element.id, { autoWidth: true })

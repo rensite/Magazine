@@ -8,8 +8,6 @@ import type { Margins, Orientation, PageSide, Unit } from '@/types/element'
 const store = useSpreadStore()
 
 const unit = computed(() => store.schema.units)
-const left = computed(() => store.schema.pages.left)
-const right = computed(() => store.schema.pages.right)
 const editingSide = ref<PageSide>('left')
 
 const currentPage = computed(() => store.schema.pages[editingSide.value])
