@@ -4,6 +4,7 @@ import { useSpreadStore } from '@/stores/spreadStore'
 import { useAuthStore } from '@/stores/authStore'
 import { supabaseSpreadService } from '@/services/spreadService'
 import { useImageUrls } from '@/composables/useImageUrls'
+import { provideStaticRender } from '@/composables/useStaticRender'
 import { rightPageX, spreadCanvasSize } from '@/utils/elementFactory'
 import { fromPx } from '@/utils/units'
 import ElementsLayer from './ElementsLayer.vue'
@@ -29,6 +30,7 @@ const auth = useAuthStore()
 
 const imageUrls = useImageUrls(supabaseSpreadService)
 provide('imageUrls', imageUrls.urls)
+provideStaticRender(true)
 
 const status = ref<'init' | 'loading' | 'ready' | 'error'>('init')
 const errorMessage = ref<string | null>(null)
@@ -132,6 +134,14 @@ const load = async () => {
 }
 
 const triggerPrint = () => window.print()
+const closeWindow = () => {
+  window.close()
+  // window.close() is silently ignored if the tab wasn't opened via script.
+  // Fall back to going back in history so the user lands on the editor.
+  setTimeout(() => {
+    if (!window.closed) history.length > 1 ? history.back() : (location.href = '/')
+  }, 50)
+}
 
 onMounted(async () => {
   await auth.init()
@@ -169,6 +179,7 @@ const sheets = computed(() => {
         · {{ params.marks ? 'с метками' : 'без меток' }}
       </span>
       <button class="btn" :disabled="status !== 'ready'" @click="triggerPrint">Печать</button>
+      <button class="btn btn-ghost" @click="closeWindow" title="Закрыть вкладку">✕</button>
     </header>
 
     <div v-if="status !== 'ready'" class="print-status no-print">
@@ -286,6 +297,12 @@ const sheets = computed(() => {
   cursor: pointer;
 }
 .print-toolbar .btn[disabled] { opacity: 0.5; cursor: default; }
+.print-toolbar .btn-ghost {
+  background: transparent;
+  color: #d8dadf;
+  padding: 4px 10px;
+}
+.print-toolbar .btn-ghost:hover { background: #2a2d33; }
 .print-status { color: #d8dadf; font-size: 13px; }
 .print-status .error { color: #f87171; }
 

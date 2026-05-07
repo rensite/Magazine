@@ -5,11 +5,13 @@ import { useSpreadStore } from '@/stores/spreadStore'
 import { useElementTransform } from '@/composables/useElementTransform'
 import { useDragResize } from '@/composables/useDragResize'
 import { useCanvasPointer } from '@/composables/useCanvasPointer'
+import { useStaticRender } from '@/composables/useStaticRender'
 
 const props = defineProps<{ element: TextElement }>()
 const store = useSpreadStore()
 const drag = useDragResize()
 const { pointerPos } = useCanvasPointer()
+const isStatic = useStaticRender()
 const editing = ref(false)
 const rootRef = ref<HTMLDivElement | null>(null)
 
@@ -62,6 +64,7 @@ const measure = () => {
 
 let ro: ResizeObserver | null = null
 onMounted(() => {
+  if (isStatic) return
   measure()
   if (typeof ResizeObserver !== 'undefined' && rootRef.value) {
     ro = new ResizeObserver(() => measure())
@@ -73,20 +76,23 @@ onBeforeUnmount(() => {
   ro = null
 })
 
-watch(
-  () => [
-    props.element.content,
-    props.element.fontFamily,
-    props.element.fontSize,
-    props.element.lineHeight,
-    props.element.autoWidth,
-    props.element.width,
-    maxWidth.value,
-  ],
-  () => requestAnimationFrame(measure),
-)
+if (!isStatic) {
+  watch(
+    () => [
+      props.element.content,
+      props.element.fontFamily,
+      props.element.fontSize,
+      props.element.lineHeight,
+      props.element.autoWidth,
+      props.element.width,
+      maxWidth.value,
+    ],
+    () => requestAnimationFrame(measure),
+  )
+}
 
 const onPointerDown = (e: PointerEvent) => {
+  if (isStatic) return
   if (editing.value) return
   e.preventDefault()
   e.stopPropagation()
@@ -99,6 +105,7 @@ const onPointerDown = (e: PointerEvent) => {
 }
 
 const onDblClick = () => {
+  if (isStatic) return
   editing.value = true
   requestAnimationFrame(() => {
     rootRef.value?.focus()
@@ -130,7 +137,7 @@ const onBlur = () => {
   <div
     ref="rootRef"
     class="pointer-events-auto absolute left-0 top-0 inline-block select-none whitespace-pre-wrap break-words"
-    :class="[fontClass, editing ? 'cursor-text' : 'cursor-move']"
+    :class="[fontClass, isStatic ? '' : (editing ? 'cursor-text' : 'cursor-move')]"
     :style="styleObj"
     :contenteditable="editing"
     @pointerdown="onPointerDown"

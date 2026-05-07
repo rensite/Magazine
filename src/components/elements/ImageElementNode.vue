@@ -4,12 +4,14 @@ import type { ImageElement } from '@/types/element'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { useDragResize } from '@/composables/useDragResize'
 import { useCanvasPointer } from '@/composables/useCanvasPointer'
+import { useStaticRender } from '@/composables/useStaticRender'
 import { ensureBox, toCssTransform } from '@/utils/transform'
 
 const props = defineProps<{ element: ImageElement }>()
 const store = useSpreadStore()
 const drag = useDragResize()
 const { pointerPos } = useCanvasPointer()
+const isStatic = useStaticRender()
 
 const urlMap = inject<Record<string, string>>('imageUrls', {})
 
@@ -26,6 +28,7 @@ const transform = computed(() => toCssTransform(ensureBox(props.element)))
 const href = computed(() => resolve(props.element.thumb) || resolve(props.element.src))
 
 const onPointerDown = (e: PointerEvent) => {
+  if (isStatic) return
   e.preventDefault()
   e.stopPropagation()
   store.select(props.element.id)
@@ -50,9 +53,9 @@ const onPointerDown = (e: PointerEvent) => {
       transform,
       transformOrigin: '0 0',
       opacity: String(props.element.opacity),
-      cursor: 'move',
+      cursor: isStatic ? 'default' : 'move',
       userSelect: 'none',
-      pointerEvents: 'auto',
+      pointerEvents: isStatic ? 'none' : 'auto',
     }"
     draggable="false"
     @pointerdown="onPointerDown"
@@ -70,8 +73,8 @@ const onPointerDown = (e: PointerEvent) => {
       transformOrigin: '0 0',
       background: '#1d2026',
       border: '1px dashed #3a3f49',
-      pointerEvents: 'auto',
-      cursor: 'move',
+      pointerEvents: isStatic ? 'none' : 'auto',
+      cursor: isStatic ? 'default' : 'move',
     }"
     @pointerdown="onPointerDown"
   />
