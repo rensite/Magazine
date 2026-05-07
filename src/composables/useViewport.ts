@@ -125,15 +125,24 @@ export const useViewport = (containerRef: Ref<HTMLElement | null>) => {
     }
   }
 
+  const onWindowBlur = () => {
+    // Safety: alt-tab while space is held would leave spaceDown stuck true,
+    // turning every subsequent click into a pan and blocking element drags.
+    spaceDown.value = false
+    document.body.style.cursor = ''
+  }
+
   onMounted(() => {
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onWindowBlur)
     requestAnimationFrame(() => fit())
   })
 
   onBeforeUnmount(() => {
     window.removeEventListener('keydown', onKeyDown)
     window.removeEventListener('keyup', onKeyUp)
+    window.removeEventListener('blur', onWindowBlur)
     document.body.style.cursor = ''
   })
 

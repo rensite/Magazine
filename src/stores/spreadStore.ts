@@ -92,7 +92,12 @@ export const useSpreadStore = defineStore('spread', {
     },
 
     beginInteraction(label: string) {
-      if (this.txInitial) return
+      if (this.txInitial) {
+        // A previous interaction never reached commit/rollback (window blur,
+        // element removed mid-drag, etc.). Bail out the orphan tx so the
+        // current pointerdown gets a clean slate.
+        this.rollbackInteraction()
+      }
       this.txInitial = this.schema
       this.txLabel = label
     },

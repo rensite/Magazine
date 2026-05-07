@@ -1,4 +1,4 @@
-import { onBeforeUnmount } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import type { ElementId, SpreadElement } from '@/types/element'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { resizeBox, snapAngle, type HandleKey } from '@/utils/geometry'
@@ -145,7 +145,28 @@ export const useDragResize = () => {
     escListener = null
   }
 
-  onBeforeUnmount(detachEsc)
+  // Safety: if pointer capture is lost (element unmounted mid-drag, devtools
+  // opened, alt-tab) the original pointerup may never fire. Watch the window
+  // and clean up any in-flight interaction on the next pointerup we observe.
+  const onWindowPointerUp = () => {
+    if (mode) end()
+  }
+  const onWindowBlur = () => {
+    if (mode) cancel()
+  }
+
+  onMounted(() => {
+    window.addEventListener('pointerup', onWindowPointerUp)
+    window.addEventListener('pointercancel', onWindowPointerUp)
+    window.addEventListener('blur', onWindowBlur)
+  })
+
+  onBeforeUnmount(() => {
+    window.removeEventListener('pointerup', onWindowPointerUp)
+    window.removeEventListener('pointercancel', onWindowPointerUp)
+    window.removeEventListener('blur', onWindowBlur)
+    detachEsc()
+  })
 
   return { beginDrag, beginResize, beginRotate, move, end, cancel }
 }
