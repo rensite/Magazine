@@ -38,45 +38,87 @@ const errorMessage = ref<string | null>(null)
 const canvas = computed(() => spreadCanvasSize(store.schema))
 const rightX = computed(() => rightPageX(store.schema))
 
-const sheetMm = computed(() => {
+const bleedPx = computed(() =>
+  Math.max(store.schema.pages.left.bleed, store.schema.pages.right.bleed),
+)
+
+interface Sheet {
+  kind: 'spread' | 'page'
+  side?: 'left' | 'right'
+  trimW: number
+  trimH: number
+  // canvas-space coordinates of the trim's top-left
+  trimOriginX: number
+  trimOriginY: number
+}
+
+const sheets = computed<Sheet[]>(() => {
+  if (status.value !== 'ready') return []
   if (params.format === 'pages') {
-    const widthPx = Math.max(store.schema.pages.left.width, store.schema.pages.right.width)
-    return {
-      width: fromPx(widthPx, 'mm'),
-      height: fromPx(canvas.value.height, 'mm'),
-    }
+    return [
+      {
+        kind: 'page',
+        side: 'left',
+        trimW: store.schema.pages.left.width,
+        trimH: store.schema.pages.left.height,
+        trimOriginX: 0,
+        trimOriginY: 0,
+      },
+      {
+        kind: 'page',
+        side: 'right',
+        trimW: store.schema.pages.right.width,
+        trimH: store.schema.pages.right.height,
+        trimOriginX: rightX.value,
+        trimOriginY: 0,
+      },
+    ]
   }
-  return {
-    width: fromPx(canvas.value.width, 'mm'),
-    height: fromPx(canvas.value.height, 'mm'),
-  }
+  return [
+    {
+      kind: 'spread',
+      trimW: canvas.value.width,
+      trimH: canvas.value.height,
+      trimOriginX: 0,
+      trimOriginY: 0,
+    },
+  ]
 })
 
-const pageStyle = (
-  side: 'left' | 'right' | null,
-): Record<string, string> => {
+const sheetSizePx = (s: Sheet) => ({
+  width: s.trimW + bleedPx.value * 2,
+  height: s.trimH + bleedPx.value * 2,
+})
+
+const firstSheet = computed<Sheet | null>(() => sheets.value[0] ?? null)
+
+const sheetMm = computed(() => {
+  const f = firstSheet.value
+  const fallbackW = canvas.value.width + bleedPx.value * 2
+  const fallbackH = canvas.value.height + bleedPx.value * 2
+  const w = f ? sheetSizePx(f).width : fallbackW
+  const h = f ? sheetSizePx(f).height : fallbackH
+  return { width: fromPx(w, 'mm'), height: fromPx(h, 'mm') }
+})
+
+const sheetStyle = (s: Sheet): Record<string, string> => {
+  const size = sheetSizePx(s)
   const bg = store.schema.background
   const bgColor = bg.type === 'plain' ? bg.color ?? '#ffffff' : '#ffffff'
-  const base: Record<string, string> = {
+  return {
     position: 'relative',
     overflow: 'hidden',
     background: bgColor,
+    width: `${size.width}px`,
+    height: `${size.height}px`,
     breakAfter: 'page',
     pageBreakAfter: 'always',
   }
-  if (side === null) {
-    base.width = `${canvas.value.width}px`
-    base.height = `${canvas.value.height}px`
-  } else {
-    const p = store.schema.pages[side]
-    base.width = `${p.width}px`
-    base.height = `${p.height}px`
-  }
-  return base
 }
 
 const cropMarkLength = 18
 const cropMarkOffset = 6
+const regMarkRadius = 6
 
 const styleTagId = 'print-page-rule'
 const writePageRule = () => {
@@ -156,17 +198,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.getElementById(styleTagId)?.remove()
 })
-
-const sheets = computed(() => {
-  if (status.value !== 'ready') return []
-  if (params.format === 'pages') {
-    return [
-      { kind: 'page' as const, side: 'left' as const },
-      { kind: 'page' as const, side: 'right' as const },
-    ]
-  }
-  return [{ kind: 'spread' as const }]
-})
 </script>
 
 <template>
@@ -187,79 +218,75 @@ const sheets = computed(() => {
       <span v-else-if="status === 'error'" class="error">{{ errorMessage }}</span>
     </div>
 
-    <template v-for="(sheet, idx) in sheets" :key="idx">
-      <section
-        v-if="sheet.kind === 'spread'"
-        class="print-sheet"
-        :style="pageStyle(null)"
+    <section
+      v-for="(sheet, idx) in sheets"
+      :key="idx"
+      class="print-sheet"
+      :class="store.schema.background.type === 'paper' ? 'paper-texture' : ''"
+      :style="sheetStyle(sheet)"
+    >
+      <!-- canvas content shifted into the trim region; clipping done by the
+           sheet's overflow:hidden so anything in the bleed area shows but
+           anything outside the sheet is cut off -->
+      <div
+        :style="{
+          position: 'absolute',
+          left: `${bleedPx - sheet.trimOriginX}px`,
+          top: `${bleedPx - sheet.trimOriginY}px`,
+          width: `${canvas.width}px`,
+          height: `${canvas.height}px`,
+        }"
       >
-        <!-- left page background -->
-        <div
-          class="page-bg"
-          :class="store.schema.background.type === 'paper' ? 'paper-texture' : ''"
-          :style="{ left: '0px', top: '0px', width: `${store.schema.pages.left.width}px`, height: `${store.schema.pages.left.height}px` }"
-        />
-        <!-- right page background -->
-        <div
-          class="page-bg"
-          :class="store.schema.background.type === 'paper' ? 'paper-texture' : ''"
-          :style="{ left: `${rightX}px`, top: '0px', width: `${store.schema.pages.right.width}px`, height: `${store.schema.pages.right.height}px` }"
-        />
         <ElementsLayer />
+      </div>
 
-        <!-- crop marks: corners of left page -->
-        <template v-if="params.marks">
-          <svg
-            class="crop-marks"
-            :width="canvas.width"
-            :height="canvas.height"
-            :viewBox="`0 0 ${canvas.width} ${canvas.height}`"
-          >
-            <g v-for="(box, i) in [
-              { x: 0, y: 0, w: store.schema.pages.left.width, h: store.schema.pages.left.height },
-              { x: rightX, y: 0, w: store.schema.pages.right.width, h: store.schema.pages.right.height },
-            ]" :key="i" stroke="black" stroke-width="0.5">
-              <!-- top-left -->
-              <line :x1="box.x - cropMarkOffset - cropMarkLength" :y1="box.y" :x2="box.x - cropMarkOffset" :y2="box.y" />
-              <line :x1="box.x" :y1="box.y - cropMarkOffset - cropMarkLength" :x2="box.x" :y2="box.y - cropMarkOffset" />
-              <!-- top-right -->
-              <line :x1="box.x + box.w + cropMarkOffset" :y1="box.y" :x2="box.x + box.w + cropMarkOffset + cropMarkLength" :y2="box.y" />
-              <line :x1="box.x + box.w" :y1="box.y - cropMarkOffset - cropMarkLength" :x2="box.x + box.w" :y2="box.y - cropMarkOffset" />
-              <!-- bottom-left -->
-              <line :x1="box.x - cropMarkOffset - cropMarkLength" :y1="box.y + box.h" :x2="box.x - cropMarkOffset" :y2="box.y + box.h" />
-              <line :x1="box.x" :y1="box.y + box.h + cropMarkOffset" :x2="box.x" :y2="box.y + box.h + cropMarkOffset + cropMarkLength" />
-              <!-- bottom-right -->
-              <line :x1="box.x + box.w + cropMarkOffset" :y1="box.y + box.h" :x2="box.x + box.w + cropMarkOffset + cropMarkLength" :y2="box.y + box.h" />
-              <line :x1="box.x + box.w" :y1="box.y + box.h + cropMarkOffset" :x2="box.x + box.w" :y2="box.y + box.h + cropMarkOffset + cropMarkLength" />
-            </g>
-          </svg>
-        </template>
-      </section>
-
-      <section
-        v-else
-        class="print-sheet"
-        :style="pageStyle(sheet.side)"
+      <!-- marks layer: crop + registration in sheet coordinates -->
+      <svg
+        v-if="params.marks"
+        class="print-marks"
+        :width="sheetSizePx(sheet).width"
+        :height="sheetSizePx(sheet).height"
+        :viewBox="`0 0 ${sheetSizePx(sheet).width} ${sheetSizePx(sheet).height}`"
       >
-        <!-- single page: shift canvas so chosen page sits at (0,0) -->
-        <div
-          class="page-bg"
-          :class="store.schema.background.type === 'paper' ? 'paper-texture' : ''"
-          :style="{ left: '0px', top: '0px', width: `${store.schema.pages[sheet.side].width}px`, height: `${store.schema.pages[sheet.side].height}px` }"
-        />
-        <div
-          :style="{
-            position: 'absolute',
-            left: sheet.side === 'left' ? '0px' : `-${rightX}px`,
-            top: '0px',
-            width: `${canvas.width}px`,
-            height: `${canvas.height}px`,
-          }"
-        >
-          <ElementsLayer />
-        </div>
-      </section>
-    </template>
+        <!-- crop marks at trim corners (offset by bleed inside sheet) -->
+        <g stroke="black" stroke-width="0.5" fill="none">
+          <!-- corner positions in sheet coords -->
+          <template v-for="(corner, ci) in [
+            { x: bleedPx, y: bleedPx, sx: -1, sy: -1 },
+            { x: bleedPx + sheet.trimW, y: bleedPx, sx: 1, sy: -1 },
+            { x: bleedPx, y: bleedPx + sheet.trimH, sx: -1, sy: 1 },
+            { x: bleedPx + sheet.trimW, y: bleedPx + sheet.trimH, sx: 1, sy: 1 },
+          ]" :key="ci">
+            <line
+              :x1="corner.x + corner.sx * cropMarkOffset"
+              :y1="corner.y"
+              :x2="corner.x + corner.sx * (cropMarkOffset + cropMarkLength)"
+              :y2="corner.y"
+            />
+            <line
+              :x1="corner.x"
+              :y1="corner.y + corner.sy * cropMarkOffset"
+              :x2="corner.x"
+              :y2="corner.y + corner.sy * (cropMarkOffset + cropMarkLength)"
+            />
+          </template>
+        </g>
+        <!-- registration marks (crosshair circles) at sheet corners,
+             centered between trim and sheet edges -->
+        <g stroke="black" stroke-width="0.4" fill="none">
+          <template v-for="(reg, ri) in [
+            { x: bleedPx / 2, y: bleedPx / 2 },
+            { x: sheetSizePx(sheet).width - bleedPx / 2, y: bleedPx / 2 },
+            { x: bleedPx / 2, y: sheetSizePx(sheet).height - bleedPx / 2 },
+            { x: sheetSizePx(sheet).width - bleedPx / 2, y: sheetSizePx(sheet).height - bleedPx / 2 },
+          ]" :key="ri">
+            <circle :cx="reg.x" :cy="reg.y" :r="regMarkRadius" />
+            <line :x1="reg.x - regMarkRadius * 1.6" :y1="reg.y" :x2="reg.x + regMarkRadius * 1.6" :y2="reg.y" />
+            <line :x1="reg.x" :y1="reg.y - regMarkRadius * 1.6" :x2="reg.x" :y2="reg.y + regMarkRadius * 1.6" />
+          </template>
+        </g>
+      </svg>
+    </section>
   </div>
 </template>
 
@@ -310,10 +337,7 @@ const sheets = computed(() => {
   background: white;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 }
-.page-bg {
-  position: absolute;
-}
-.crop-marks {
+.print-marks {
   position: absolute;
   left: 0;
   top: 0;
