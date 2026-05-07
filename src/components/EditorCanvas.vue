@@ -17,6 +17,9 @@ const vp = useViewport(containerRef)
 const canvas = computed(() => spreadCanvasSize(store.schema))
 const rightX = computed(() => rightPageX(store.schema))
 
+const buildSha = __BUILD_SHA__
+const buildTime = __BUILD_TIME__
+
 const stageStyle = computed(() => ({
   width: `${canvas.value.width}px`,
   height: `${canvas.value.height}px`,
@@ -92,6 +95,11 @@ const onCanvasPointerDown = (e: PointerEvent) => {
       <button class="pointer-events-auto rounded px-2 py-0.5 hover:bg-ink-700" @click="vp.zoomToHundred()">100% ⌘1</button>
       <span>{{ Math.round(store.zoom * 100) }}%</span>
     </div>
+
+    <div
+      class="pointer-events-none absolute bottom-2 right-3 select-text font-mono text-[10px] text-ink-500"
+      :title="`built ${buildTime}`"
+    >{{ buildSha }}</div>
   </div>
 </template>
 
