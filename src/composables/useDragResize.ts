@@ -137,7 +137,7 @@ export const useDragResize = () => {
     const el = store.elements.find((e) => e.id === ctx.id)
     if (!el) return
     activeId = ctx.id
-    mode = { kind: 'drag', startEl: structuredClone(el), startPointer: ctx.pointer }
+    mode = { kind: 'drag', startEl: JSON.parse(JSON.stringify(el)), startPointer: ctx.pointer }
     store.beginInteraction('drag')
     lockSelection()
     installListeners()
@@ -147,7 +147,7 @@ export const useDragResize = () => {
     const el = store.elements.find((e) => e.id === ctx.id)
     if (!el) return
     activeId = ctx.id
-    mode = { kind: 'resize', startEl: structuredClone(el), startPointer: ctx.pointer, handle }
+    mode = { kind: 'resize', startEl: JSON.parse(JSON.stringify(el)), startPointer: ctx.pointer, handle }
     store.beginInteraction('resize')
     lockSelection()
     installListeners()
@@ -160,7 +160,7 @@ export const useDragResize = () => {
     const center: Vec2 = { x: el.x + el.width / 2, y: el.y + el.height / 2 }
     const startAngle =
       (Math.atan2(ctx.pointer.y - center.y, ctx.pointer.x - center.x) * 180) / Math.PI
-    mode = { kind: 'rotate', startEl: structuredClone(el), center, startAngle }
+    mode = { kind: 'rotate', startEl: JSON.parse(JSON.stringify(el)), center, startAngle }
     store.beginInteraction('rotate')
     lockSelection()
     installListeners()
