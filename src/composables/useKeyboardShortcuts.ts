@@ -12,6 +12,11 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 }
 
+// Only contenteditable counts for clipboard/duplicate intent — focus in a
+// toolbar input shouldn't disable Cmd+C/V/D for the selected canvas element.
+const isInTextEdit = (target: EventTarget | null): boolean =>
+  target instanceof HTMLElement && target.isContentEditable
+
 export const useKeyboardShortcuts = ({ onSave }: Handlers = {}) => {
   const store = useSpreadStore()
 
@@ -34,23 +39,28 @@ export const useKeyboardShortcuts = ({ onSave }: Handlers = {}) => {
       return
     }
 
-    if (isEditableTarget(e.target)) return
+    // Clipboard / duplicate: yield only when the user is actually editing
+    // text (contenteditable). A focused color picker or number input
+    // shouldn't swallow these.
+    if (!isInTextEdit(e.target)) {
+      if (cmd && e.key.toLowerCase() === 'c' && store.selectedId) {
+        e.preventDefault()
+        store.copySelected()
+        return
+      }
+      if (cmd && e.key.toLowerCase() === 'v' && store.clipboard) {
+        e.preventDefault()
+        store.paste()
+        return
+      }
+      if (cmd && e.key.toLowerCase() === 'd' && store.selectedId) {
+        e.preventDefault()
+        store.duplicateSelected()
+        return
+      }
+    }
 
-    if (cmd && e.key.toLowerCase() === 'c' && store.selectedId) {
-      e.preventDefault()
-      store.copySelected()
-      return
-    }
-    if (cmd && e.key.toLowerCase() === 'v' && store.clipboard) {
-      e.preventDefault()
-      store.paste()
-      return
-    }
-    if (cmd && e.key.toLowerCase() === 'd' && store.selectedId) {
-      e.preventDefault()
-      store.duplicateSelected()
-      return
-    }
+    if (isEditableTarget(e.target)) return
 
     if ((e.key === 'Delete' || e.key === 'Backspace') && store.selectedId) {
       e.preventDefault()
