@@ -27,12 +27,20 @@ export const useDragResize = () => {
   let activeId: ElementId | null = null
   let escListener: ((e: KeyboardEvent) => void) | null = null
 
+  const lockSelection = () => {
+    document.body.style.userSelect = 'none'
+  }
+  const unlockSelection = () => {
+    document.body.style.userSelect = ''
+  }
+
   const beginDrag = (ctx: BeginContext) => {
     const el = store.elements.find((e) => e.id === ctx.id)
     if (!el) return
     activeId = ctx.id
     mode = { kind: 'drag', startEl: structuredClone(el), startPointer: ctx.pointer }
     store.beginInteraction('drag')
+    lockSelection()
     attachEsc()
   }
 
@@ -42,6 +50,7 @@ export const useDragResize = () => {
     activeId = ctx.id
     mode = { kind: 'resize', startEl: structuredClone(el), startPointer: ctx.pointer, handle }
     store.beginInteraction('resize')
+    lockSelection()
     attachEsc()
   }
 
@@ -53,6 +62,7 @@ export const useDragResize = () => {
     const startAngle = (Math.atan2(ctx.pointer.y - center.y, ctx.pointer.x - center.x) * 180) / Math.PI
     mode = { kind: 'rotate', startEl: structuredClone(el), center, startAngle }
     store.beginInteraction('rotate')
+    lockSelection()
     attachEsc()
   }
 
@@ -108,6 +118,7 @@ export const useDragResize = () => {
     store.commitInteraction()
     mode = null
     activeId = null
+    unlockSelection()
     detachEsc()
   }
 
@@ -116,6 +127,7 @@ export const useDragResize = () => {
     store.rollbackInteraction()
     mode = null
     activeId = null
+    unlockSelection()
     detachEsc()
   }
 

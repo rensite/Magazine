@@ -14,6 +14,8 @@ const isText = computed(() => props.element.type === 'text')
 const transform = computed(() => toSvgTransform(ensureBox(props.element)))
 const handleSize = computed(() => 10 / store.zoom)
 const stroke = computed(() => 1.5 / store.zoom)
+const rotateZoneSize = computed(() => 18 / store.zoom)
+const rotateZoneOffset = computed(() => 9 / store.zoom)
 
 const hoveringHandle = ref(false)
 const interacting = ref(false)
@@ -38,10 +40,19 @@ const handles = computed<Handle[]>(() => {
   ]
 })
 
-const rotateHandle = computed(() => ({
-  x: props.element.width / 2,
-  y: -28 / store.zoom,
-}))
+interface RotateZone { x: number; y: number }
+
+const rotateZones = computed<RotateZone[]>(() => {
+  const w = props.element.width
+  const h = props.element.height
+  const o = rotateZoneOffset.value
+  return [
+    { x: -o, y: -o },
+    { x: w - o, y: -o },
+    { x: -o, y: h - o },
+    { x: w - o, y: h - o },
+  ]
+})
 
 const pointerPos = (e: PointerEvent): Vec2 => {
   const svg = (e.currentTarget as SVGElement).ownerSVGElement!
@@ -55,6 +66,7 @@ const pointerPos = (e: PointerEvent): Vec2 => {
 }
 
 const startResize = (e: PointerEvent, key: HandleKey) => {
+  e.preventDefault()
   e.stopPropagation()
   ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   interacting.value = true
@@ -65,6 +77,7 @@ const startResize = (e: PointerEvent, key: HandleKey) => {
 }
 
 const startRotate = (e: PointerEvent) => {
+  e.preventDefault()
   e.stopPropagation()
   ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
   interacting.value = true
@@ -92,6 +105,9 @@ const onSideHandleDoubleClick = (e: MouseEvent) => {
   e.stopPropagation()
   store.updateElement(props.element.id, { autoWidth: true })
 }
+
+const rotateCursor =
+  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'><path fill='none' stroke='black' stroke-width='1.5' d='M4 10a6 6 0 1 0 2-4.5'/><path fill='black' d='M3 4l3 1.5L4.5 8z'/></svg>\") 10 10, grab"
 </script>
 
 <template>
@@ -106,22 +122,16 @@ const onSideHandleDoubleClick = (e: MouseEvent) => {
       stroke-dasharray="4 4"
       vector-effect="non-scaling-stroke"
     />
-    <line
-      v-if="showFrame"
-      :x1="props.element.width / 2"
-      :y1="0"
-      :x2="rotateHandle.x"
-      :y2="rotateHandle.y"
-      stroke="#d4a85f"
-      :stroke-width="stroke"
-      vector-effect="non-scaling-stroke"
-    />
-    <circle
-      class="handle"
-      :cx="rotateHandle.x"
-      :cy="rotateHandle.y"
-      :r="handleSize / 1.4"
-      style="cursor: grab"
+
+    <rect
+      v-for="(z, i) in rotateZones"
+      :key="`rz-${i}`"
+      :x="z.x"
+      :y="z.y"
+      :width="rotateZoneSize"
+      :height="rotateZoneSize"
+      fill="transparent"
+      :style="{ cursor: rotateCursor }"
       @pointerenter="hoveringHandle = true"
       @pointerleave="hoveringHandle = false"
       @pointerdown="startRotate"
@@ -129,6 +139,7 @@ const onSideHandleDoubleClick = (e: MouseEvent) => {
       @pointerup="onUp"
       @dblclick="onRotateDoubleClick"
     />
+
     <rect
       v-for="hd in handles"
       :key="hd.key"
