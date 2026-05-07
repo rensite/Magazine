@@ -8,8 +8,11 @@ export interface Box {
   rotate: number
 }
 
-export const toCssTransform = (b: Box): string =>
-  `translate(${b.x}px, ${b.y}px) rotate(${b.rotate}deg)`
+export const toCssTransform = (b: Box): string => {
+  const cx = b.width / 2
+  const cy = b.height / 2
+  return `translate(${b.x}px, ${b.y}px) translate(${cx}px, ${cy}px) rotate(${b.rotate}deg) translate(${-cx}px, ${-cy}px)`
+}
 
 export const toSvgTransform = (b: Box): string => {
   const cx = b.width / 2
