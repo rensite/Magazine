@@ -14,9 +14,11 @@ describe('transform', () => {
     expect(p.y).toBeCloseTo(10)
   })
 
-  it('toCssTransform formats translate+rotate', () => {
+  it('toCssTransform rotates around element center', () => {
     const css = toCssTransform({ x: 10, y: 20, width: 100, height: 50, rotate: 45 })
-    expect(css).toBe('translate(10px, 20px) rotate(45deg)')
+    expect(css).toBe(
+      'translate(10px, 20px) translate(50px, 25px) rotate(45deg) translate(-50px, -25px)',
+    )
   })
 
   it('toSvgTransform rotates around element center', () => {
