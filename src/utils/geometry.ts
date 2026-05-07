@@ -7,7 +7,8 @@ export const clamp = (v: number, min: number, max: number): number =>
 export const snapAngle = (deg: number, step = 15, threshold = 4): number => {
   const normalized = ((deg % 360) + 360) % 360
   const nearest = Math.round(normalized / step) * step
-  return Math.abs(normalized - nearest) <= threshold ? nearest : normalized
+  const wrapped = nearest % 360
+  return Math.abs(normalized - nearest) <= threshold ? wrapped : normalized
 }
 
 export const aabb = (b: Box): { minX: number; minY: number; maxX: number; maxY: number } => {
