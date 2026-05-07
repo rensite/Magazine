@@ -7,7 +7,6 @@ import SvgLayer from './SvgLayer.vue'
 import HtmlLayer from './HtmlLayer.vue'
 import OverlayLayer from './OverlayLayer.vue'
 import Guides from './Guides.vue'
-import FloatingToolbar from './FloatingToolbar.vue'
 
 const store = useSpreadStore()
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -85,8 +84,6 @@ const onCanvasPointerDown = (e: PointerEvent) => {
       <Guides />
       <OverlayLayer />
     </div>
-
-    <FloatingToolbar v-if="store.selected" :element="store.selected" />
 
     <div class="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded bg-ink-800/80 px-3 py-1 text-xs text-ink-300">
       <button class="pointer-events-auto rounded px-2 py-0.5 hover:bg-ink-700" @click="vp.fit()">Fit ⌘0</button>

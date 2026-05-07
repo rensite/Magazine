@@ -26,12 +26,6 @@ interface Handle { x: number; y: number; key: HandleKey; cursor: string }
 const handles = computed<Handle[]>(() => {
   const w = props.element.width
   const h = props.element.height
-  if (isText.value) {
-    return [
-      { x: 0, y: h / 2, key: 'w', cursor: 'ew-resize' },
-      { x: w, y: h / 2, key: 'e', cursor: 'ew-resize' },
-    ]
-  }
   return [
     { x: 0, y: 0, key: 'nw', cursor: 'nwse-resize' },
     { x: w, y: 0, key: 'ne', cursor: 'nesw-resize' },
