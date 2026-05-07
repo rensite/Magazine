@@ -36,6 +36,22 @@ export const useKeyboardShortcuts = ({ onSave }: Handlers = {}) => {
 
     if (isEditableTarget(e.target)) return
 
+    if (cmd && e.key.toLowerCase() === 'c' && store.selectedId) {
+      e.preventDefault()
+      store.copySelected()
+      return
+    }
+    if (cmd && e.key.toLowerCase() === 'v' && store.clipboard) {
+      e.preventDefault()
+      store.paste()
+      return
+    }
+    if (cmd && e.key.toLowerCase() === 'd' && store.selectedId) {
+      e.preventDefault()
+      store.duplicateSelected()
+      return
+    }
+
     if ((e.key === 'Delete' || e.key === 'Backspace') && store.selectedId) {
       e.preventDefault()
       store.removeElement(store.selectedId)

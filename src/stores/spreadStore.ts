@@ -11,7 +11,7 @@ import type {
   SpreadSchema,
   Unit,
 } from '@/types/element'
-import { emptySchema, migrateSchema } from '@/utils/elementFactory'
+import { cloneElement, emptySchema, migrateSchema } from '@/utils/elementFactory'
 
 enablePatches()
 
@@ -35,6 +35,7 @@ interface State {
   txInitial: SpreadSchema | null
   txLabel: string | null
   dirty: boolean
+  clipboard: SpreadElement | null
 }
 
 export const useSpreadStore = defineStore('spread', {
@@ -50,6 +51,7 @@ export const useSpreadStore = defineStore('spread', {
     txInitial: null,
     txLabel: null,
     dirty: false,
+    clipboard: null,
   }),
   getters: {
     elements: (s): SpreadElement[] => s.schema.elements,
@@ -200,6 +202,21 @@ export const useSpreadStore = defineStore('spread', {
         const [el] = draft.elements.splice(i, 1)
         draft.elements.unshift(el)
       })
+    },
+
+    copySelected() {
+      if (!this.selected) return
+      this.clipboard = JSON.parse(JSON.stringify(this.selected))
+    },
+
+    paste() {
+      if (!this.clipboard) return
+      this.addElement(cloneElement(this.clipboard))
+    },
+
+    duplicateSelected() {
+      if (!this.selected) return
+      this.addElement(cloneElement(this.selected))
     },
 
     resetRotation(id: ElementId) {

@@ -203,6 +203,11 @@ const fonts: { id: FontFamily; label: string }[] = [
       >Back</button>
       <button
         class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600"
+        @click="store.duplicateSelected()"
+        title="Duplicate (Cmd+D)"
+      >Dup</button>
+      <button
+        class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600"
         @click="store.removeElement(selected.id)"
       >Del</button>
     </template>
