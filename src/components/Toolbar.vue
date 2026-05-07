@@ -4,6 +4,7 @@ import { useSpreadStore } from '@/stores/spreadStore'
 import { isText, isImage, type FontFamily } from '@/types/element'
 import { makeImageElement, makeTextElement } from '@/utils/elementFactory'
 import { prepareLocalImage, uploadImage } from '@/services/imageUpload'
+import { textDefaults, rememberTextStyle } from '@/composables/useTextDefaults'
 
 const props = defineProps<{
   spreadId: string | null
@@ -20,7 +21,17 @@ const isTextSelected = computed(() => selected.value !== null && isText(selected
 const isImageSelected = computed(() => selected.value !== null && isImage(selected.value))
 
 const addText = () => {
-  store.addElement(makeTextElement({ x: 200, y: 200 }))
+  store.addElement(
+    makeTextElement({
+      x: 200,
+      y: 200,
+      fontFamily: textDefaults.fontFamily,
+      fontSize: textDefaults.fontSize,
+      color: textDefaults.color,
+      align: textDefaults.align,
+      lineHeight: textDefaults.lineHeight,
+    }),
+  )
 }
 
 const onPickImage = () => fileInput.value?.click()
@@ -72,6 +83,7 @@ const onFiles = async (e: Event) => {
 const setFont = (family: FontFamily) => {
   if (selected.value && isText(selected.value)) {
     store.updateElement(selected.value.id, { fontFamily: family })
+    rememberTextStyle({ fontFamily: family })
   }
 }
 
@@ -79,6 +91,7 @@ const setColor = (e: Event) => {
   const value = (e.target as HTMLInputElement).value
   if (selected.value && isText(selected.value)) {
     store.updateElement(selected.value.id, { color: value })
+    rememberTextStyle({ color: value })
   }
 }
 
@@ -91,8 +104,9 @@ const setOpacity = (e: Event) => {
 
 const setFontSize = (e: Event) => {
   const value = parseInt((e.target as HTMLInputElement).value, 10)
-  if (selected.value && isText(selected.value)) {
+  if (Number.isFinite(value) && selected.value && isText(selected.value)) {
     store.updateElement(selected.value.id, { fontSize: value })
+    rememberTextStyle({ fontSize: value })
   }
 }
 

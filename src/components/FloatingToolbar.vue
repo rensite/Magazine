@@ -5,6 +5,7 @@ import { isText } from '@/types/element'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { aabb } from '@/utils/geometry'
 import { ensureBox } from '@/utils/transform'
+import { rememberTextStyle } from '@/composables/useTextDefaults'
 
 const props = defineProps<{ element: SpreadElement }>()
 const store = useSpreadStore()
@@ -28,6 +29,7 @@ const onScale = (factor: number) => {
     const next = Math.max(8, Math.min(400, Math.round((el as TextElement).fontSize * factor)))
     if (next !== (el as TextElement).fontSize) {
       store.updateElement(el.id, { fontSize: next })
+      rememberTextStyle({ fontSize: next })
     }
     return
   }
