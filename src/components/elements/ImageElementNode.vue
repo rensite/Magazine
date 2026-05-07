@@ -6,6 +6,7 @@ import { useDragResize } from '@/composables/useDragResize'
 import { useCanvasPointer } from '@/composables/useCanvasPointer'
 import { useStaticRender } from '@/composables/useStaticRender'
 import { ensureBox, toCssTransform } from '@/utils/transform'
+import { dpiQuality, imageEffectiveDpi } from '@/utils/imageDpi'
 
 const props = defineProps<{ element: ImageElement }>()
 const store = useSpreadStore()
@@ -26,6 +27,14 @@ const resolve = (path: string | undefined): string => {
 
 const transform = computed(() => toCssTransform(ensureBox(props.element)))
 const href = computed(() => resolve(props.element.thumb) || resolve(props.element.src))
+
+const effectiveDpi = computed(() => imageEffectiveDpi(props.element))
+const quality = computed(() => dpiQuality(effectiveDpi.value))
+const showWarning = computed(() => !isStatic && quality.value !== 'ok')
+
+const warningColor = computed(() =>
+  quality.value === 'critical' ? '#ef4444' : '#f59e0b',
+)
 
 const onPointerDown = (e: PointerEvent) => {
   if (isStatic) return
@@ -78,4 +87,35 @@ const onPointerDown = (e: PointerEvent) => {
     }"
     @pointerdown="onPointerDown"
   />
+  <div
+    v-if="showWarning"
+    :style="{
+      position: 'absolute',
+      left: '0px',
+      top: '0px',
+      width: `${props.element.width}px`,
+      height: `${props.element.height}px`,
+      transform,
+      transformOrigin: '0 0',
+      border: `2px dashed ${warningColor}`,
+      boxSizing: 'border-box',
+      pointerEvents: 'none',
+    }"
+  >
+    <span
+      :style="{
+        position: 'absolute',
+        top: '0px',
+        left: '0px',
+        background: warningColor,
+        color: '#1a1410',
+        fontSize: '10px',
+        lineHeight: '1.2',
+        padding: '2px 5px',
+        fontFamily: 'system-ui, sans-serif',
+        fontWeight: '600',
+        whiteSpace: 'nowrap',
+      }"
+    >{{ Math.round(effectiveDpi) }} DPI · {{ quality === 'critical' ? 'низкое разрешение' : 'на грани' }}</span>
+  </div>
 </template>

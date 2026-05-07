@@ -7,7 +7,10 @@ export interface UploadedImage {
   naturalHeight: number
 }
 
-const MAX_FULL = 2000
+// Print-grade ceiling: A4 (297mm) at 300 DPI ≈ 3508px; A3 ≈ 4961px.
+// 4000px covers A4 fully and most photo-book sizes, while still keeping
+// JPEGs under ~3MB at q=0.9.
+const MAX_FULL = 4000
 const MAX_THUMB = 300
 
 const ALPHA_TYPES = new Set(['image/png', 'image/webp', 'image/gif', 'image/svg+xml'])
