@@ -77,6 +77,14 @@ export interface SpreadRecord {
   schema: SpreadSchema
   current_version: number
   updated_at: string
+  chapter_id?: string | null
+  position?: number
+}
+
+export interface ChapterRecord {
+  id: string
+  title: string
+  position: number
 }
 
 export interface SpreadVersion {

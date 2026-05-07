@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import type { SpreadRecord, SpreadSchema } from '@/types/element'
+import { computed, ref } from 'vue'
+import type { ChapterRecord, SpreadRecord, SpreadSchema } from '@/types/element'
 import SpreadPreview from './SpreadPreview.vue'
+import EditableTitle from './EditableTitle.vue'
 
 interface SpreadSummary {
   id: string
   title: string
   updated_at: string
   schema?: SpreadSchema | unknown
+  chapter_id?: string | null
+  position?: number
 }
 
 const props = defineProps<{
   current: SpreadRecord | null
   list: SpreadSummary[]
+  chapters: ChapterRecord[]
   loading: boolean
 }>()
 
@@ -22,32 +26,28 @@ const emit = defineEmits<{
   rename: [id: string, title: string]
   remove: [id: string]
   signOut: []
+  moveSpread: [id: string, delta: -1 | 1]
+  moveSpreadToChapter: [id: string, chapterId: string | null]
+  createChapter: []
+  renameChapter: [id: string, title: string]
+  removeChapter: [id: string]
+  moveChapter: [id: string, delta: -1 | 1]
 }>()
 
 const open = ref(false)
 const galleryOpen = ref(false)
-const renaming = ref(false)
-const titleDraft = ref('')
-
-const startRename = () => {
-  if (!props.current) return
-  titleDraft.value = props.current.title
-  renaming.value = true
-}
-
-const commitRename = () => {
-  if (!props.current) return
-  const next = titleDraft.value.trim()
-  if (next && next !== props.current.title) {
-    emit('rename', props.current.id, next)
-  }
-  renaming.value = false
-}
 
 const onPick = (id: string) => {
   open.value = false
   galleryOpen.value = false
   if (id !== props.current?.id) emit('open', id)
+}
+
+const exportPdf = (format: 'spread' | 'pages') => {
+  if (!props.current) return
+  const url = `${window.location.origin}${window.location.pathname}?print=${props.current.id}&format=${format}&marks=1`
+  window.open(url, '_blank', 'noopener,noreferrer')
+  open.value = false
 }
 
 const formatDate = (s: string) => {
@@ -59,6 +59,37 @@ const formatDate = (s: string) => {
     d.getDate() === today.getDate()
   return sameDay ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString()
 }
+
+interface Group {
+  chapter: ChapterRecord | null
+  spreads: SpreadSummary[]
+}
+
+const groups = computed<Group[]>(() => {
+  const byId = new Map<string | null, SpreadSummary[]>()
+  byId.set(null, [])
+  for (const c of props.chapters) byId.set(c.id, [])
+  for (const s of props.list) {
+    const key = s.chapter_id ?? null
+    if (!byId.has(key)) byId.set(key, [])
+    byId.get(key)!.push(s)
+  }
+  for (const arr of byId.values()) {
+    arr.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+  }
+  const ordered: Group[] = []
+  for (const c of props.chapters) {
+    ordered.push({ chapter: c, spreads: byId.get(c.id) ?? [] })
+  }
+  ordered.push({ chapter: null, spreads: byId.get(null) ?? [] })
+  return ordered
+})
+
+const indexInGroup = (group: Group, id: string): number =>
+  group.spreads.findIndex((s) => s.id === id)
+
+const chapterIndex = (id: string): number =>
+  props.chapters.findIndex((c) => c.id === id)
 </script>
 
 <template>
@@ -98,10 +129,19 @@ const formatDate = (s: string) => {
           @click="emit('create'); open = false"
         >+ Новый разворот</button>
         <button
+          class="block w-full rounded px-3 py-1.5 text-left text-xs text-ink-200 hover:bg-ink-700"
+          @click="emit('createChapter'); open = false"
+        >+ Новая глава</button>
+        <button
           v-if="current"
           class="block w-full rounded px-3 py-1.5 text-left text-xs text-ink-200 hover:bg-ink-700"
-          @click="startRename"
-        >Переименовать</button>
+          @click="exportPdf('spread')"
+        >📄 Экспорт PDF (разворот)</button>
+        <button
+          v-if="current"
+          class="block w-full rounded px-3 py-1.5 text-left text-xs text-ink-200 hover:bg-ink-700"
+          @click="exportPdf('pages')"
+        >📄 Экспорт PDF (постранично)</button>
         <button
           v-if="current"
           class="block w-full rounded px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10"
@@ -115,7 +155,7 @@ const formatDate = (s: string) => {
       </div>
     </div>
 
-    <!-- Gallery modal -->
+    <!-- Gallery modal with chapters -->
     <div
       v-if="galleryOpen"
       class="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/80 p-6"
@@ -125,13 +165,17 @@ const formatDate = (s: string) => {
         <div class="flex items-center justify-between border-b border-ink-700 px-5 py-3">
           <div class="flex items-center gap-3">
             <span class="font-serif text-lg italic text-accent">Развороты</span>
-            <span class="text-xs text-ink-400">{{ list.length }}</span>
+            <span class="text-xs text-ink-400">{{ list.length }} в {{ chapters.length }} главах</span>
           </div>
           <div class="flex items-center gap-2">
             <button
+              class="rounded bg-ink-700 px-3 py-1 text-xs text-ink-200 hover:bg-ink-600"
+              @click="emit('createChapter')"
+            >+ Глава</button>
+            <button
               class="rounded bg-accent px-3 py-1 text-xs text-ink-900 hover:bg-accent/90"
               @click="emit('create'); galleryOpen = false"
-            >+ Новый</button>
+            >+ Разворот</button>
             <button
               class="rounded px-2 py-1 text-xs text-ink-300 hover:bg-ink-700"
               @click="galleryOpen = false"
@@ -139,55 +183,99 @@ const formatDate = (s: string) => {
           </div>
         </div>
 
-        <div class="overflow-y-auto p-5">
+        <div class="overflow-y-auto p-5 space-y-6">
           <div v-if="loading && !list.length" class="py-12 text-center text-sm text-ink-400">Загрузка…</div>
-          <div v-else-if="!list.length" class="py-12 text-center text-sm text-ink-400">Пока ничего нет — создайте первый разворот.</div>
-          <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4">
-            <button
-              v-for="s in list"
-              :key="s.id"
-              class="group flex flex-col gap-2 rounded-md border p-2 text-left transition"
-              :class="s.id === current?.id ? 'border-accent bg-ink-700' : 'border-ink-700 hover:border-ink-500 hover:bg-ink-700/60'"
-              @click="onPick(s.id)"
+          <div v-else-if="!list.length && !chapters.length" class="py-12 text-center text-sm text-ink-400">Пока ничего нет — создайте первый разворот или главу.</div>
+
+          <section v-for="group in groups" v-else :key="group.chapter?.id ?? 'none'">
+            <header class="mb-2 flex items-center gap-2">
+              <template v-if="group.chapter">
+                <EditableTitle
+                  :value="group.chapter.title"
+                  text-class="font-serif text-base italic text-ink-100 cursor-text"
+                  input-class="rounded bg-ink-700 px-2 py-1 text-sm text-ink-100 outline-none focus:ring-1 focus:ring-accent"
+                  @commit="(v) => emit('renameChapter', group.chapter!.id, v)"
+                />
+                <span class="text-xs text-ink-500">({{ group.spreads.length }})</span>
+                <div class="ml-auto flex items-center gap-1 text-ink-400">
+                  <button
+                    class="rounded px-2 py-0.5 text-xs hover:bg-ink-700 disabled:opacity-30"
+                    :disabled="chapterIndex(group.chapter.id) === 0"
+                    @click="emit('moveChapter', group.chapter.id, -1)"
+                    title="Выше"
+                  >↑</button>
+                  <button
+                    class="rounded px-2 py-0.5 text-xs hover:bg-ink-700 disabled:opacity-30"
+                    :disabled="chapterIndex(group.chapter.id) === chapters.length - 1"
+                    @click="emit('moveChapter', group.chapter.id, 1)"
+                    title="Ниже"
+                  >↓</button>
+                  <button
+                    class="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:text-ink-500 disabled:hover:bg-transparent"
+                    :disabled="group.spreads.length > 0"
+                    :title="group.spreads.length > 0 ? 'Сначала перенеси развороты' : 'Удалить главу'"
+                    @click="emit('removeChapter', group.chapter.id)"
+                  >✕</button>
+                </div>
+              </template>
+              <template v-else>
+                <span class="font-serif text-base italic text-ink-400">Без главы</span>
+                <span class="text-xs text-ink-500">({{ group.spreads.length }})</span>
+              </template>
+            </header>
+
+            <div
+              v-if="group.spreads.length"
+              class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-4"
             >
-              <SpreadPreview
-                :schema="s.schema"
-                :width="184"
-                :height="120"
-              />
-              <div class="flex items-center justify-between gap-2 px-1">
-                <span
-                  class="truncate text-xs"
-                  :class="s.id === current?.id ? 'text-accent' : 'text-ink-100'"
-                >{{ s.title }}</span>
-                <span class="shrink-0 text-[10px] text-ink-400">{{ formatDate(s.updated_at) }}</span>
+              <div
+                v-for="s in group.spreads"
+                :key="s.id"
+                class="group flex flex-col gap-2 rounded-md border p-2 transition"
+                :class="s.id === current?.id ? 'border-accent bg-ink-700' : 'border-ink-700 hover:border-ink-500 hover:bg-ink-700/60'"
+              >
+                <button class="block" @click="onPick(s.id)">
+                  <SpreadPreview :schema="s.schema" :width="184" :height="120" />
+                </button>
+                <div class="flex items-center justify-between gap-2 px-1">
+                  <EditableTitle
+                    :value="s.title"
+                    :text-class="`truncate text-xs ${s.id === current?.id ? 'text-accent' : 'text-ink-100'} hover:text-accent cursor-text`"
+                    input-class="w-full rounded bg-ink-700 px-1 py-0.5 text-xs text-ink-100 outline-none focus:ring-1 focus:ring-accent"
+                    @commit="(v) => emit('rename', s.id, v)"
+                  />
+                  <span class="shrink-0 text-[10px] text-ink-400">{{ formatDate(s.updated_at) }}</span>
+                </div>
+                <div class="flex items-center justify-between px-1 pb-0.5">
+                  <div class="flex items-center gap-1">
+                    <button
+                      class="rounded px-1.5 py-0.5 text-[10px] text-ink-300 hover:bg-ink-700 disabled:opacity-30"
+                      :disabled="indexInGroup(group, s.id) === 0"
+                      @click="emit('moveSpread', s.id, -1)"
+                      title="Выше"
+                    >↑</button>
+                    <button
+                      class="rounded px-1.5 py-0.5 text-[10px] text-ink-300 hover:bg-ink-700 disabled:opacity-30"
+                      :disabled="indexInGroup(group, s.id) === group.spreads.length - 1"
+                      @click="emit('moveSpread', s.id, 1)"
+                      title="Ниже"
+                    >↓</button>
+                  </div>
+                  <select
+                    class="max-w-[120px] truncate rounded bg-ink-700 px-1 py-0.5 text-[10px] text-ink-200 outline-none"
+                    :value="s.chapter_id ?? ''"
+                    @change="(e) => emit('moveSpreadToChapter', s.id, ((e.target as HTMLSelectElement).value || null))"
+                  >
+                    <option value="">— без главы —</option>
+                    <option v-for="c in chapters" :key="c.id" :value="c.id">{{ c.title }}</option>
+                  </select>
+                </div>
               </div>
-            </button>
-          </div>
+            </div>
+            <p v-else class="text-xs text-ink-500">— пусто —</p>
+          </section>
         </div>
       </div>
-    </div>
-
-    <div
-      v-if="renaming"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/70"
-      @click.self="renaming = false"
-    >
-      <form
-        class="w-full max-w-sm rounded-lg border border-ink-700 bg-ink-800 p-4"
-        @submit.prevent="commitRename"
-      >
-        <label class="text-xs text-ink-300">Название</label>
-        <input
-          v-model="titleDraft"
-          autofocus
-          class="mt-1 w-full rounded bg-ink-700 px-2 py-1.5 text-sm text-ink-100 outline-none focus:ring-1 focus:ring-accent"
-        />
-        <div class="mt-3 flex justify-end gap-2">
-          <button type="button" class="rounded px-3 py-1 text-xs text-ink-300 hover:bg-ink-700" @click="renaming = false">Отмена</button>
-          <button type="submit" class="rounded bg-accent px-3 py-1 text-xs text-ink-900 hover:bg-accent/90">OK</button>
-        </div>
-      </form>
     </div>
   </div>
 </template>

@@ -5,6 +5,8 @@ import Toolbar from '@/components/Toolbar.vue'
 import PageSettingsPanel from '@/components/PageSettingsPanel.vue'
 import AuthGate from '@/components/AuthGate.vue'
 import SpreadsMenu from '@/components/SpreadsMenu.vue'
+import PrintView from '@/components/PrintView.vue'
+import EditableTitle from '@/components/EditableTitle.vue'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { useAuthStore } from '@/stores/authStore'
 import { supabaseSpreadService } from '@/services/spreadService'
@@ -13,7 +15,9 @@ import { useImageUrls } from '@/composables/useImageUrls'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
 import { cacheGet, isCacheNewer } from '@/services/localCache'
 import { emptySchema } from '@/utils/elementFactory'
-import type { SpreadRecord, SpreadSchema } from '@/types/element'
+import type { ChapterRecord, SpreadRecord, SpreadSchema } from '@/types/element'
+
+const isPrintMode = new URLSearchParams(window.location.search).has('print')
 
 const store = useSpreadStore()
 const auth = useAuthStore()
@@ -32,9 +36,12 @@ interface SpreadSummary {
   updated_at: string
   current_version: number
   schema?: SpreadSchema | unknown
+  chapter_id?: string | null
+  position?: number
 }
 
 const spreads = ref<SpreadSummary[]>([])
+const chapters = ref<ChapterRecord[]>([])
 const current = ref<SpreadRecord | null>(null)
 const listLoading = ref(false)
 const initError = ref<string | null>(null)
@@ -44,7 +51,12 @@ const LAST_OPENED_KEY = 'stan:lastOpenedSpread'
 const refreshList = async () => {
   listLoading.value = true
   try {
-    spreads.value = await supabaseSpreadService.list()
+    const [list, chapterList] = await Promise.all([
+      supabaseSpreadService.list(),
+      supabaseSpreadService.listChapters(),
+    ])
+    spreads.value = list
+    chapters.value = chapterList
   } catch (err) {
     initError.value = (err as Error).message
   } finally {
@@ -96,6 +108,75 @@ const removeSpread = async (id: string) => {
   }
 }
 
+const swapPositions = async <T extends { id: string; position?: number }>(
+  list: T[],
+  id: string,
+  delta: -1 | 1,
+  apply: (id: string, position: number) => Promise<void>,
+) => {
+  const i = list.findIndex((x) => x.id === id)
+  const j = i + delta
+  if (i === -1 || j < 0 || j >= list.length) return
+  const a = list[i]
+  const b = list[j]
+  const posA = a.position ?? i
+  const posB = b.position ?? j
+  await Promise.all([apply(a.id, posB), apply(b.id, posA)])
+  await refreshList()
+}
+
+const moveSpreadInChapter = async (id: string, delta: -1 | 1) => {
+  const target = spreads.value.find((s) => s.id === id)
+  if (!target) return
+  const siblings = spreads.value.filter(
+    (s) => (s.chapter_id ?? null) === (target.chapter_id ?? null),
+  )
+  await swapPositions(siblings, id, delta, supabaseSpreadService.setPosition)
+}
+
+const moveSpreadToChapter = async (id: string, chapterId: string | null) => {
+  const target = spreads.value.find((s) => s.id === id)
+  if (!target) return
+  const siblings = spreads.value.filter(
+    (s) => (s.chapter_id ?? null) === chapterId && s.id !== id,
+  )
+  const nextPosition = siblings.reduce((m, s) => Math.max(m, s.position ?? 0), -1) + 1
+  await supabaseSpreadService.setChapter(id, chapterId)
+  await supabaseSpreadService.setPosition(id, nextPosition)
+  await refreshList()
+}
+
+const createChapter = async () => {
+  const title = prompt('Название главы')
+  if (!title?.trim()) return
+  await supabaseSpreadService.createChapter(title.trim())
+  await refreshList()
+}
+
+const renameChapter = async (id: string, title: string) => {
+  await supabaseSpreadService.renameChapter(id, title)
+  await refreshList()
+}
+
+const removeChapter = async (id: string) => {
+  const used = spreads.value.filter((s) => s.chapter_id === id)
+  if (used.length > 0) {
+    alert(
+      `Нельзя удалить главу — внутри ${used.length} ${
+        used.length === 1 ? 'разворот' : 'разворотов'
+      }. Сначала перенеси их в другую главу или в «Без главы».`,
+    )
+    return
+  }
+  if (!confirm('Удалить главу?')) return
+  await supabaseSpreadService.removeChapter(id)
+  await refreshList()
+}
+
+const moveChapter = async (id: string, delta: -1 | 1) => {
+  await swapPositions(chapters.value, id, delta, supabaseSpreadService.setChapterPosition)
+}
+
 const initForUser = async () => {
   await refreshList()
   const lastOpened = localStorage.getItem(LAST_OPENED_KEY)
@@ -131,7 +212,8 @@ const headerTitle = computed(() => current.value?.title ?? store.title)
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-ink-900 text-ink-100">
+  <PrintView v-if="isPrintMode" />
+  <div v-else class="flex h-full flex-col bg-ink-900 text-ink-100">
     <template v-if="!auth.initialized">
       <div class="flex h-full items-center justify-center text-ink-400">…</div>
     </template>
@@ -160,14 +242,27 @@ VITE_SUPABASE_ASSETS_BUCKET=spread-assets</pre>
           <SpreadsMenu
             :current="current"
             :list="spreads"
+            :chapters="chapters"
             :loading="listLoading"
             @open="openSpread"
             @create="createSpread"
             @rename="renameSpread"
             @remove="removeSpread"
+            @move-spread="moveSpreadInChapter"
+            @move-spread-to-chapter="moveSpreadToChapter"
+            @create-chapter="createChapter"
+            @rename-chapter="renameChapter"
+            @remove-chapter="removeChapter"
+            @move-chapter="moveChapter"
             @sign-out="auth.signOut"
           />
-          <span class="text-xs text-ink-500">{{ headerTitle }}</span>
+          <EditableTitle
+            v-if="current"
+            :value="headerTitle"
+            text-class="text-xs text-ink-500 hover:text-ink-300 cursor-text"
+            input-class="rounded bg-ink-700 px-2 py-0.5 text-xs text-ink-100 outline-none focus:ring-1 focus:ring-accent"
+            @commit="(v) => current && renameSpread(current.id, v)"
+          />
         </div>
         <div class="flex items-center gap-3 text-xs text-ink-400">
           <span v-if="persistence.state.status === 'saving-local'">сохраняется локально…</span>

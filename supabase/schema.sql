@@ -19,6 +19,46 @@ create table if not exists public.spreads (
 
 create index if not exists spreads_owner_idx on public.spreads (owner_id, updated_at desc);
 
+create table if not exists public.chapters (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  title text not null default 'Глава',
+  position int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists chapters_owner_idx on public.chapters (owner_id, position);
+
+alter table public.spreads
+  add column if not exists chapter_id uuid references public.chapters(id) on delete restrict;
+alter table public.spreads
+  add column if not exists position int not null default 0;
+
+-- ensure ON DELETE RESTRICT even if the column was created earlier with a
+-- different action; safe to re-run.
+do $$
+declare
+  cname text;
+begin
+  select conname into cname
+    from pg_constraint
+    where conrelid = 'public.spreads'::regclass
+      and contype = 'f'
+      and conkey = (
+        select array[attnum] from pg_attribute
+        where attrelid = 'public.spreads'::regclass and attname = 'chapter_id'
+      )
+    limit 1;
+  if cname is not null then
+    execute format('alter table public.spreads drop constraint %I', cname);
+  end if;
+  alter table public.spreads
+    add constraint spreads_chapter_id_fkey
+    foreign key (chapter_id) references public.chapters(id) on delete restrict;
+end $$;
+
+create index if not exists spreads_chapter_idx on public.spreads (chapter_id, position);
+
 create table if not exists public.spread_versions (
   id uuid primary key default gen_random_uuid(),
   spread_id uuid not null references public.spreads(id) on delete cascade,
@@ -128,6 +168,21 @@ $$;
 
 alter table public.spreads enable row level security;
 alter table public.spread_versions enable row level security;
+alter table public.chapters enable row level security;
+
+drop policy if exists chapters_owner_select on public.chapters;
+create policy chapters_owner_select on public.chapters
+  for select using (owner_id = auth.uid());
+drop policy if exists chapters_owner_insert on public.chapters;
+create policy chapters_owner_insert on public.chapters
+  for insert with check (owner_id = auth.uid());
+drop policy if exists chapters_owner_update on public.chapters;
+create policy chapters_owner_update on public.chapters
+  for update using (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+drop policy if exists chapters_owner_delete on public.chapters;
+create policy chapters_owner_delete on public.chapters
+  for delete using (owner_id = auth.uid());
 
 drop policy if exists spreads_owner_select on public.spreads;
 create policy spreads_owner_select on public.spreads
