@@ -1,0 +1,104 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { useSpreadStore } from '@/stores/spreadStore'
+import { useViewport } from '@/composables/useViewport'
+import { rightPageX, spreadCanvasSize } from '@/utils/elementFactory'
+import SvgLayer from './SvgLayer.vue'
+import HtmlLayer from './HtmlLayer.vue'
+import OverlayLayer from './OverlayLayer.vue'
+import Guides from './Guides.vue'
+import FloatingToolbar from './FloatingToolbar.vue'
+
+const store = useSpreadStore()
+const containerRef = ref<HTMLDivElement | null>(null)
+const vp = useViewport(containerRef)
+
+const canvas = computed(() => spreadCanvasSize(store.schema))
+const rightX = computed(() => rightPageX(store.schema))
+
+const stageStyle = computed(() => ({
+  width: `${canvas.value.width}px`,
+  height: `${canvas.value.height}px`,
+  transform: `translate(${store.pan.x}px, ${store.pan.y}px) scale(${store.zoom})`,
+  transformOrigin: '0 0',
+}))
+
+const gridStyle = computed(() => {
+  const baseSize = 24
+  const size = Math.max(8, baseSize * store.zoom)
+  const offsetX = ((store.pan.x % size) + size) % size
+  const offsetY = ((store.pan.y % size) + size) % size
+  return {
+    backgroundSize: `${size}px ${size}px`,
+    backgroundPosition: `${offsetX}px ${offsetY}px`,
+  }
+})
+
+const bgStyle = computed(() => {
+  const bg = store.schema.background
+  if (bg.type === 'plain') {
+    return { backgroundColor: bg.color ?? '#f5efe2' }
+  }
+  return {}
+})
+
+const cursorClass = computed(() => {
+  if (vp.isPanning.value) return 'cursor-grabbing'
+  if (vp.spaceDown.value) return 'cursor-grab'
+  return ''
+})
+
+const onCanvasPointerDown = (e: PointerEvent) => {
+  vp.onPointerDown(e)
+  if (e.defaultPrevented) return
+  if (e.target === e.currentTarget && e.button === 0) {
+    store.select(null)
+  }
+}
+</script>
+
+<template>
+  <div
+    ref="containerRef"
+    class="scratch-bg relative h-full w-full overflow-hidden"
+    :class="cursorClass"
+    :style="gridStyle"
+    @wheel="vp.onWheel"
+    @pointerdown.capture="onCanvasPointerDown"
+    @pointermove="vp.onPointerMove"
+    @pointerup="vp.onPointerUp"
+    @pointercancel="vp.onPointerUp"
+  >
+    <div class="absolute left-0 top-0 origin-top-left" :style="stageStyle">
+      <div
+        class="absolute shadow-[0_30px_60px_rgba(0,0,0,0.5)]"
+        :class="store.schema.background.type === 'paper' ? 'paper-texture' : ''"
+        :style="{ left: '0px', top: '0px', width: `${store.schema.pages.left.width}px`, height: `${store.schema.pages.left.height}px`, ...bgStyle }"
+      />
+      <div
+        class="absolute shadow-[0_30px_60px_rgba(0,0,0,0.5)]"
+        :class="store.schema.background.type === 'paper' ? 'paper-texture' : ''"
+        :style="{ left: `${rightX}px`, top: '0px', width: `${store.schema.pages.right.width}px`, height: `${store.schema.pages.right.height}px`, ...bgStyle }"
+      />
+      <SvgLayer />
+      <HtmlLayer />
+      <Guides />
+      <OverlayLayer />
+    </div>
+
+    <FloatingToolbar v-if="store.selected" :element="store.selected" />
+
+    <div class="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded bg-ink-800/80 px-3 py-1 text-xs text-ink-300">
+      <button class="pointer-events-auto rounded px-2 py-0.5 hover:bg-ink-700" @click="vp.fit()">Fit ⌘0</button>
+      <button class="pointer-events-auto rounded px-2 py-0.5 hover:bg-ink-700" @click="vp.zoomToHundred()">100% ⌘1</button>
+      <span>{{ Math.round(store.zoom * 100) }}%</span>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.scratch-bg {
+  background-color: #0e0f12;
+  background-image: radial-gradient(circle, rgba(138, 144, 154, 0.18) 1px, transparent 1px);
+}
+</style>

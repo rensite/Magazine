@@ -1,0 +1,165 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
+import type { TextElement } from '@/types/element'
+import { useSpreadStore } from '@/stores/spreadStore'
+import { useElementTransform } from '@/composables/useElementTransform'
+import { useDragResize } from '@/composables/useDragResize'
+
+const props = defineProps<{ element: TextElement }>()
+const store = useSpreadStore()
+const drag = useDragResize()
+const editing = ref(false)
+const rootRef = ref<HTMLDivElement | null>(null)
+
+const elRef = toRef(props, 'element')
+const { css } = useElementTransform(elRef)
+
+const fontClass = computed(() => {
+  switch (props.element.fontFamily) {
+    case 'mono': return 'font-mono'
+    case 'serif': return 'font-serif'
+    case 'hand': return 'font-hand'
+  }
+})
+
+const maxWidth = computed(() =>
+  Math.min(store.schema.pages.left.width, store.schema.pages.right.width),
+)
+
+const styleObj = computed(() => {
+  const base: Record<string, string | undefined> = {
+    transform: css.value,
+    transformOrigin: '0 0',
+    fontSize: `${props.element.fontSize}px`,
+    color: props.element.color,
+    textAlign: props.element.align,
+    lineHeight: String(props.element.lineHeight),
+    opacity: String(props.element.opacity),
+    minWidth: '8px',
+    minHeight: '8px',
+  }
+  if (props.element.autoWidth) {
+    base.maxWidth = `${maxWidth.value}px`
+  } else {
+    base.width = `${props.element.width}px`
+  }
+  return base
+})
+
+const measure = () => {
+  const node = rootRef.value
+  if (!node) return
+  const w = Math.ceil(node.scrollWidth)
+  const h = Math.ceil(node.scrollHeight)
+  if (props.element.autoWidth) {
+    store.setLayout(props.element.id, { width: w, height: h })
+  } else {
+    store.setLayout(props.element.id, { height: h })
+  }
+}
+
+let ro: ResizeObserver | null = null
+onMounted(() => {
+  measure()
+  if (typeof ResizeObserver !== 'undefined' && rootRef.value) {
+    ro = new ResizeObserver(() => measure())
+    ro.observe(rootRef.value)
+  }
+})
+onBeforeUnmount(() => {
+  ro?.disconnect()
+  ro = null
+})
+
+watch(
+  () => [
+    props.element.content,
+    props.element.fontFamily,
+    props.element.fontSize,
+    props.element.lineHeight,
+    props.element.autoWidth,
+    props.element.width,
+    maxWidth.value,
+  ],
+  () => requestAnimationFrame(measure),
+)
+
+const containerRect = (e: PointerEvent): DOMRect => {
+  const layer = (e.currentTarget as HTMLElement).closest('.absolute.inset-0')
+  return (layer ?? (e.currentTarget as HTMLElement)).getBoundingClientRect()
+}
+
+const screenToCanvas = (e: PointerEvent) => {
+  const rect = containerRect(e)
+  return {
+    x: (e.clientX - rect.left) / store.zoom,
+    y: (e.clientY - rect.top) / store.zoom,
+  }
+}
+
+const onPointerDown = (e: PointerEvent) => {
+  if (editing.value) return
+  e.stopPropagation()
+  store.select(props.element.id)
+  ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+  drag.beginDrag({
+    id: props.element.id,
+    pointer: screenToCanvas(e),
+    zoom: store.zoom,
+    shift: e.shiftKey,
+  })
+}
+
+const onPointerMove = (e: PointerEvent) => {
+  if (e.buttons === 0 || editing.value) return
+  drag.move(screenToCanvas(e), store.zoom, e.shiftKey)
+}
+
+const onPointerUp = (e: PointerEvent) => {
+  ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
+  drag.end()
+}
+
+const onDblClick = () => {
+  editing.value = true
+  requestAnimationFrame(() => {
+    rootRef.value?.focus()
+    const sel = window.getSelection()
+    if (sel && rootRef.value) {
+      const range = document.createRange()
+      range.selectNodeContents(rootRef.value)
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+  })
+}
+
+const onInput = () => {
+  measure()
+}
+
+const onBlur = () => {
+  if (!editing.value) return
+  const next = rootRef.value?.innerText ?? ''
+  editing.value = false
+  if (next !== props.element.content) {
+    store.updateElement(props.element.id, { content: next })
+  }
+}
+</script>
+
+<template>
+  <div
+    ref="rootRef"
+    class="pointer-events-auto absolute left-0 top-0 inline-block select-none whitespace-pre-wrap break-words"
+    :class="[fontClass, editing ? 'cursor-text' : 'cursor-move']"
+    :style="styleObj"
+    :contenteditable="editing"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="onPointerUp"
+    @dblclick="onDblClick"
+    @input="onInput"
+    @blur="onBlur"
+  >{{ props.element.content }}</div>
+</template>

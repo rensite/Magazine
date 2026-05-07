@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #app { height: 100%; }
+body { overscroll-behavior: none; }
+
+.paper-texture {
+  background-color: #f5efe2;
+  background-image:
+    radial-gradient(rgba(120, 90, 50, 0.08) 1px, transparent 1px),
+    radial-gradient(rgba(120, 90, 50, 0.05) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 2px;
+}
+
+.handle {
+  fill: #15171c;
+  stroke: #d4a85f;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+[contenteditable]:focus { outline: 2px solid #d4a85f; outline-offset: 2px; }
