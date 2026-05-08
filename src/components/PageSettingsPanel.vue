@@ -227,10 +227,14 @@ watch(
       />
     </section>
 
-    <section>
+    <section class="flex flex-col gap-2">
       <label class="flex items-center gap-2 text-xs text-ink-300">
         <input type="checkbox" :checked="store.schema.showGuides" @change="store.toggleGuides()" />
         Show guides
+      </label>
+      <label class="flex items-center gap-2 text-xs text-ink-300">
+        <input type="checkbox" :checked="store.schema.showDpiWarnings" @change="store.toggleDpiWarnings()" />
+        Show DPI warnings
       </label>
     </section>
 

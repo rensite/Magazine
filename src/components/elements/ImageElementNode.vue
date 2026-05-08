@@ -30,7 +30,9 @@ const href = computed(() => resolve(props.element.thumb) || resolve(props.elemen
 
 const effectiveDpi = computed(() => imageEffectiveDpi(props.element))
 const quality = computed(() => dpiQuality(effectiveDpi.value))
-const showWarning = computed(() => !isStatic && quality.value !== 'ok')
+const showWarning = computed(
+  () => !isStatic && store.schema.showDpiWarnings && quality.value !== 'ok',
+)
 
 const warningColor = computed(() =>
   quality.value === 'critical' ? '#ef4444' : '#f59e0b',

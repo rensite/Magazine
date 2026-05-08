@@ -85,12 +85,24 @@ const columnLines = computed<ColumnLine[]>(() => {
 
 <template>
   <svg
-    v-if="store.schema.showGuides || baseline.enabled || columnGrid.enabled"
     class="pointer-events-none absolute left-0 top-0"
     :width="canvas.width"
     :height="canvas.height"
     :viewBox="`0 0 ${canvas.width} ${canvas.height}`"
   >
+    <g v-for="p in pages" :key="`m${p.side}`">
+      <rect
+        :x="p.x + p.page.margins.left"
+        :y="p.page.margins.top"
+        :width="p.page.width - p.page.margins.left - p.page.margins.right"
+        :height="p.page.height - p.page.margins.top - p.page.margins.bottom"
+        fill="none"
+        stroke="#5fa8d4"
+        :stroke-width="stroke"
+        :stroke-dasharray="dashShort"
+        vector-effect="non-scaling-stroke"
+      />
+    </g>
     <template v-if="store.schema.showGuides">
     <g v-for="p in pages" :key="p.side">
       <rect
@@ -112,17 +124,6 @@ const columnLines = computed<ColumnLine[]>(() => {
         fill="none"
         stroke="#0e0f12"
         :stroke-width="stroke"
-        vector-effect="non-scaling-stroke"
-      />
-      <rect
-        :x="p.x + p.page.margins.left"
-        :y="p.page.margins.top"
-        :width="p.page.width - p.page.margins.left - p.page.margins.right"
-        :height="p.page.height - p.page.margins.top - p.page.margins.bottom"
-        fill="none"
-        stroke="#5fa8d4"
-        :stroke-width="stroke"
-        :stroke-dasharray="dashShort"
         vector-effect="non-scaling-stroke"
       />
     </g>

@@ -130,6 +130,7 @@ export const useSpreadStore = defineStore('spread', {
         d.orientation = final.orientation
         d.mirrorPages = final.mirrorPages
         d.showGuides = final.showGuides
+        d.showDpiWarnings = final.showDpiWarnings
         d.baselineGrid = final.baselineGrid
         d.columnGrid = final.columnGrid
       })
@@ -318,6 +319,12 @@ export const useSpreadStore = defineStore('spread', {
     toggleGuides() {
       this.apply('guides', (d) => {
         d.showGuides = !d.showGuides
+      })
+    },
+
+    toggleDpiWarnings() {
+      this.apply('dpi warnings', (d) => {
+        d.showDpiWarnings = !d.showDpiWarnings
       })
     },
 

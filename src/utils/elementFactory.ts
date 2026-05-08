@@ -96,6 +96,7 @@ export const emptySchema = (): SpreadSchema => ({
   gutter: toPx(10, 'mm'),
   background: { type: 'paper' },
   showGuides: true,
+  showDpiWarnings: true,
   baselineGrid: defaultBaselineGrid(),
   columnGrid: defaultColumnGrid(),
   elements: [],
@@ -126,6 +127,7 @@ export const migrateSchema = (raw: unknown): SpreadSchema => {
       gutter: 0,
       background: raw.background,
       showGuides: true,
+      showDpiWarnings: true,
       baselineGrid: defaultBaselineGrid(),
       columnGrid: defaultColumnGrid(),
       elements: raw.elements,
@@ -135,6 +137,7 @@ export const migrateSchema = (raw: unknown): SpreadSchema => {
     const s = raw as SpreadSchema
     return {
       ...s,
+      showDpiWarnings: s.showDpiWarnings ?? true,
       baselineGrid: s.baselineGrid ?? defaultBaselineGrid(),
       columnGrid: s.columnGrid ?? defaultColumnGrid(),
     }

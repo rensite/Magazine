@@ -79,6 +79,7 @@ export interface SpreadSchema {
   gutter: number
   background: BackgroundSettings
   showGuides: boolean
+  showDpiWarnings: boolean
   baselineGrid: BaselineGrid
   columnGrid: ColumnGrid
   elements: SpreadElement[]
