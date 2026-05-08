@@ -4,6 +4,9 @@ import { useSpreadStore } from '@/stores/spreadStore'
 import { useCanvasPointer } from './useCanvasPointer'
 import { resizeBox, snapAngle, type HandleKey } from '@/utils/geometry'
 import { ensureBox, type Vec2 } from '@/utils/transform'
+import { buildSnapLines, snapDrag, snapResize } from '@/utils/snap'
+
+const SNAP_PX = 6
 
 type Mode =
   | { kind: 'drag'; startEl: SpreadElement; startPointer: Vec2 }
@@ -36,23 +39,32 @@ export const useDragResize = () => {
     document.body.style.userSelect = ''
   }
 
-  const move = (pointer: Vec2, shift: boolean) => {
+  const move = (pointer: Vec2, shift: boolean, alt: boolean) => {
     if (!mode || !activeId) return
     const id = activeId
+    const snapThreshold = alt ? 0 : SNAP_PX / Math.max(0.001, store.zoom)
     if (mode.kind === 'drag') {
       const d = canvasDelta(mode.startPointer, pointer)
-      const next = {
+      const proposed = {
         ...mode.startEl,
         x: mode.startEl.x + d.x,
         y: mode.startEl.y + d.y,
       }
+      const snapped =
+        mode.startEl.rotate === 0 && snapThreshold > 0
+          ? snapDrag(ensureBox(proposed), buildSnapLines(store.schema), snapThreshold)
+          : { x: proposed.x, y: proposed.y }
+      const next = { ...proposed, x: snapped.x, y: snapped.y }
       store.updateInteraction((draft) => {
         const i = draft.elements.findIndex((e) => e.id === id)
         if (i !== -1) draft.elements[i] = next
       })
     } else if (mode.kind === 'resize') {
       const d = canvasDelta(mode.startPointer, pointer)
-      const resized = resizeBox(ensureBox(mode.startEl), mode.handle, d.x, d.y, shift)
+      let resized = resizeBox(ensureBox(mode.startEl), mode.handle, d.x, d.y, shift)
+      if (mode.startEl.rotate === 0 && snapThreshold > 0 && !shift) {
+        resized = snapResize(resized, mode.handle, buildSnapLines(store.schema), snapThreshold)
+      }
       store.updateInteraction((draft) => {
         const i = draft.elements.findIndex((e) => e.id === id)
         if (i === -1) return
@@ -102,7 +114,7 @@ export const useDragResize = () => {
   const onWinMove = (e: PointerEvent) => {
     if (!mode) return
     const pos = screenToCanvas(e.clientX, e.clientY)
-    move(pos, e.shiftKey)
+    move(pos, e.shiftKey, e.altKey)
   }
   const onWinUp = () => {
     if (mode) end()

@@ -56,6 +56,20 @@ export interface BackgroundSettings {
   imageSrc?: string
 }
 
+export interface BaselineGrid {
+  enabled: boolean
+  lineHeight: number
+  offset: number
+  color: string
+}
+
+export interface ColumnGrid {
+  enabled: boolean
+  columns: number
+  gutter: number
+  color: string
+}
+
 export interface SpreadSchema {
   version: 2
   units: Unit
@@ -65,6 +79,8 @@ export interface SpreadSchema {
   gutter: number
   background: BackgroundSettings
   showGuides: boolean
+  baselineGrid: BaselineGrid
+  columnGrid: ColumnGrid
   elements: SpreadElement[]
 }
 

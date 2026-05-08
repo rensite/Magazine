@@ -1,4 +1,6 @@
 import type {
+  BaselineGrid,
+  ColumnGrid,
   ImageElement,
   Margins,
   PageSettings,
@@ -71,6 +73,20 @@ const defaultPage = (): PageSettings => {
   }
 }
 
+const defaultBaselineGrid = (): BaselineGrid => ({
+  enabled: false,
+  lineHeight: toPx(4, 'mm'),
+  offset: 0,
+  color: '#e35353',
+})
+
+const defaultColumnGrid = (): ColumnGrid => ({
+  enabled: false,
+  columns: 6,
+  gutter: toPx(4, 'mm'),
+  color: '#e35353',
+})
+
 export const emptySchema = (): SpreadSchema => ({
   version: 2,
   units: 'mm',
@@ -80,6 +96,8 @@ export const emptySchema = (): SpreadSchema => ({
   gutter: toPx(10, 'mm'),
   background: { type: 'paper' },
   showGuides: true,
+  baselineGrid: defaultBaselineGrid(),
+  columnGrid: defaultColumnGrid(),
   elements: [],
 })
 
@@ -108,11 +126,18 @@ export const migrateSchema = (raw: unknown): SpreadSchema => {
       gutter: 0,
       background: raw.background,
       showGuides: true,
+      baselineGrid: defaultBaselineGrid(),
+      columnGrid: defaultColumnGrid(),
       elements: raw.elements,
     }
   }
   if (raw && typeof raw === 'object' && (raw as { version?: number }).version === 2) {
-    return raw as SpreadSchema
+    const s = raw as SpreadSchema
+    return {
+      ...s,
+      baselineGrid: s.baselineGrid ?? defaultBaselineGrid(),
+      columnGrid: s.columnGrid ?? defaultColumnGrid(),
+    }
   }
   return emptySchema()
 }

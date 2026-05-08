@@ -233,5 +233,61 @@ watch(
         Show guides
       </label>
     </section>
+
+    <section class="flex flex-col gap-2 border-t border-ink-700 pt-4">
+      <label class="flex items-center gap-2 text-xs text-ink-300">
+        <input type="checkbox" :checked="store.schema.baselineGrid.enabled"
+          @change="store.setBaselineGrid({ enabled: ($event.target as HTMLInputElement).checked })" />
+        Baseline grid
+      </label>
+      <div v-if="store.schema.baselineGrid.enabled" class="grid grid-cols-2 gap-2">
+        <label class="flex flex-col gap-1 text-xs text-ink-400">
+          Leading ({{ UNIT_SUFFIX[unit] }})
+          <input class="rounded bg-ink-700 px-2 py-1 text-ink-100" type="number" step="0.1" min="0.1"
+            :value="inUnit(store.schema.baselineGrid.lineHeight)"
+            @change="store.setBaselineGrid({ lineHeight: toPx(Number(($event.target as HTMLInputElement).value), unit) })" />
+        </label>
+        <label class="flex flex-col gap-1 text-xs text-ink-400">
+          Offset ({{ UNIT_SUFFIX[unit] }})
+          <input class="rounded bg-ink-700 px-2 py-1 text-ink-100" type="number" step="0.1"
+            :value="inUnit(store.schema.baselineGrid.offset)"
+            @change="store.setBaselineGrid({ offset: toPx(Number(($event.target as HTMLInputElement).value), unit) })" />
+        </label>
+        <label class="col-span-2 flex flex-col gap-1 text-xs text-ink-400">
+          Color
+          <input type="color" class="h-8 w-full cursor-pointer rounded border border-ink-600 bg-transparent"
+            :value="store.schema.baselineGrid.color"
+            @input="store.setBaselineGrid({ color: ($event.target as HTMLInputElement).value })" />
+        </label>
+      </div>
+    </section>
+
+    <section class="flex flex-col gap-2 border-t border-ink-700 pt-4">
+      <label class="flex items-center gap-2 text-xs text-ink-300">
+        <input type="checkbox" :checked="store.schema.columnGrid.enabled"
+          @change="store.setColumnGrid({ enabled: ($event.target as HTMLInputElement).checked })" />
+        Column grid
+      </label>
+      <div v-if="store.schema.columnGrid.enabled" class="grid grid-cols-2 gap-2">
+        <label class="flex flex-col gap-1 text-xs text-ink-400">
+          Columns
+          <input class="rounded bg-ink-700 px-2 py-1 text-ink-100" type="number" step="1" min="1" max="24"
+            :value="store.schema.columnGrid.columns"
+            @change="store.setColumnGrid({ columns: Math.max(1, Math.round(Number(($event.target as HTMLInputElement).value))) })" />
+        </label>
+        <label class="flex flex-col gap-1 text-xs text-ink-400">
+          Gutter ({{ UNIT_SUFFIX[unit] }})
+          <input class="rounded bg-ink-700 px-2 py-1 text-ink-100" type="number" step="0.1" min="0"
+            :value="inUnit(store.schema.columnGrid.gutter)"
+            @change="store.setColumnGrid({ gutter: toPx(Number(($event.target as HTMLInputElement).value), unit) })" />
+        </label>
+        <label class="col-span-2 flex flex-col gap-1 text-xs text-ink-400">
+          Color
+          <input type="color" class="h-8 w-full cursor-pointer rounded border border-ink-600 bg-transparent"
+            :value="store.schema.columnGrid.color"
+            @input="store.setColumnGrid({ color: ($event.target as HTMLInputElement).value })" />
+        </label>
+      </div>
+    </section>
   </aside>
 </template>

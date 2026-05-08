@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { produceWithPatches, applyPatches, enablePatches, type Patch } from 'immer'
 import type {
   BackgroundSettings,
+  BaselineGrid,
+  ColumnGrid,
   ElementId,
   Margins,
   Orientation,
@@ -128,6 +130,8 @@ export const useSpreadStore = defineStore('spread', {
         d.orientation = final.orientation
         d.mirrorPages = final.mirrorPages
         d.showGuides = final.showGuides
+        d.baselineGrid = final.baselineGrid
+        d.columnGrid = final.columnGrid
       })
       if (patches.length > 0) {
         this.past.push({ patches, inverse, label })
@@ -314,6 +318,18 @@ export const useSpreadStore = defineStore('spread', {
     toggleGuides() {
       this.apply('guides', (d) => {
         d.showGuides = !d.showGuides
+      })
+    },
+
+    setBaselineGrid(patch: Partial<BaselineGrid>) {
+      this.apply('baseline grid', (d) => {
+        d.baselineGrid = { ...d.baselineGrid, ...patch }
+      })
+    },
+
+    setColumnGrid(patch: Partial<ColumnGrid>) {
+      this.apply('column grid', (d) => {
+        d.columnGrid = { ...d.columnGrid, ...patch }
       })
     },
 
