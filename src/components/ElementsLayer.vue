@@ -11,10 +11,9 @@ const elements = computed(() => store.elements)
 <template>
   <div class="pointer-events-none absolute inset-0">
     <div
-      v-for="(el, i) in elements"
+      v-for="el in elements"
       :key="el.id"
       class="pointer-events-none absolute inset-0"
-      :style="{ zIndex: i }"
     >
       <ImageElementNode v-if="el.type === 'image'" :element="el" />
       <TextElementNode v-else-if="el.type === 'text'" :element="el" />
