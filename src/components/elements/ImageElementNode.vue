@@ -40,6 +40,11 @@ const warningColor = computed(() =>
 
 const onPointerDown = (e: PointerEvent) => {
   if (isStatic) return
+  if (props.element.locked) {
+    e.stopPropagation()
+    store.select(props.element.id)
+    return
+  }
   e.preventDefault()
   e.stopPropagation()
   store.select(props.element.id)
@@ -48,6 +53,12 @@ const onPointerDown = (e: PointerEvent) => {
     pointer: pointerPos(e),
     shift: e.shiftKey,
   })
+}
+
+const onDoubleClick = (e: MouseEvent) => {
+  if (isStatic) return
+  e.stopPropagation()
+  store.resetTransform(props.element.id)
 }
 </script>
 
@@ -70,6 +81,7 @@ const onPointerDown = (e: PointerEvent) => {
     }"
     draggable="false"
     @pointerdown="onPointerDown"
+    @dblclick="onDoubleClick"
     @dragstart.prevent
   />
   <div
@@ -88,6 +100,7 @@ const onPointerDown = (e: PointerEvent) => {
       cursor: isStatic ? 'default' : 'move',
     }"
     @pointerdown="onPointerDown"
+    @dblclick="onDoubleClick"
   />
   <div
     v-if="showWarning"

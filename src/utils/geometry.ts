@@ -31,7 +31,7 @@ export const aabb = (b: Box): { minX: number; minY: number; maxX: number; maxY: 
 
 export const MIN_DIM = 8
 
-export type HandleKey = 'nw' | 'ne' | 'sw' | 'se' | 'e' | 'w'
+export type HandleKey = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
 
 export const resizeBox = (
   start: Box,
@@ -70,6 +70,13 @@ export const resizeBox = (
     case 'w':
       width = Math.max(MIN_DIM, start.width - dx)
       x = start.x + start.width - width
+      break
+    case 'n':
+      height = Math.max(MIN_DIM, start.height - dy)
+      y = start.y + start.height - height
+      break
+    case 's':
+      height = Math.max(MIN_DIM, start.height + dy)
       break
   }
   return { x, y, width, height, rotate: start.rotate }

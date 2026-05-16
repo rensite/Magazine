@@ -191,6 +191,31 @@ export const useSpreadStore = defineStore('spread', {
       if (this.selectedId === id) this.selectedId = null
     },
 
+    toggleLock(id: ElementId) {
+      this.apply('toggle lock', (draft) => {
+        const el = draft.elements.find((e) => e.id === id)
+        if (el) el.locked = !el.locked
+      })
+    },
+
+    toggleHidden(id: ElementId) {
+      this.apply('toggle hidden', (draft) => {
+        const el = draft.elements.find((e) => e.id === id)
+        if (el) el.hidden = !el.hidden
+      })
+    },
+
+    reorderElement(id: ElementId, toIndex: number) {
+      this.apply('reorder', (draft) => {
+        const i = draft.elements.findIndex((e) => e.id === id)
+        if (i === -1) return
+        const clamped = Math.max(0, Math.min(draft.elements.length - 1, toIndex))
+        if (i === clamped) return
+        const [el] = draft.elements.splice(i, 1)
+        draft.elements.splice(clamped, 0, el)
+      })
+    },
+
     bringToFront(id: ElementId) {
       this.apply('bring to front', (draft) => {
         const i = draft.elements.findIndex((e) => e.id === id)
@@ -228,6 +253,34 @@ export const useSpreadStore = defineStore('spread', {
       this.apply('reset rotation', (draft) => {
         const el = draft.elements.find((e) => e.id === id)
         if (el) el.rotate = 0
+      })
+    },
+
+    fitFrameToText(id: ElementId) {
+      this.apply('fit frame to text', (draft) => {
+        const el = draft.elements.find((e) => e.id === id)
+        if (!el || el.type !== 'text') return
+        el.autoWidth = true
+      })
+    },
+
+    fitTextToFrame(id: ElementId, size: number) {
+      this.apply('fit text to frame', (draft) => {
+        const el = draft.elements.find((e) => e.id === id)
+        if (!el || el.type !== 'text') return
+        el.fontSize = size
+        el.autoWidth = false
+      })
+    },
+
+    resetTransform(id: ElementId) {
+      this.apply('reset transform', (draft) => {
+        const el = draft.elements.find((e) => e.id === id)
+        if (!el) return
+        el.rotate = 0
+        if (el.type === 'image' && el.naturalWidth > 0 && el.naturalHeight > 0) {
+          el.height = (el.width * el.naturalHeight) / el.naturalWidth
+        }
       })
     },
 

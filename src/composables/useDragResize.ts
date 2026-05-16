@@ -4,7 +4,8 @@ import { useSpreadStore } from '@/stores/spreadStore'
 import { useCanvasPointer } from './useCanvasPointer'
 import { resizeBox, snapAngle, type HandleKey } from '@/utils/geometry'
 import { ensureBox, type Vec2 } from '@/utils/transform'
-import { buildSnapLines, snapDrag, snapResize } from '@/utils/snap'
+import { buildElementSnapLines, buildSnapLines, snapDrag, snapResize, type SnapLines } from '@/utils/snap'
+import { clearSmartGuides, setSmartGuides } from './useSmartGuides'
 
 const SNAP_PX = 6
 
@@ -39,6 +40,26 @@ export const useDragResize = () => {
     document.body.style.userSelect = ''
   }
 
+  const combinedLines = (excludeId: string | null): SnapLines => {
+    const base = buildSnapLines(store.schema)
+    const elems = buildElementSnapLines(store.schema, excludeId)
+    return { x: [...base.x, ...elems.x], y: [...base.y, ...elems.y] }
+  }
+
+  const detectMatches = (
+    box: { x: number; y: number; width: number; height: number },
+    lines: SnapLines,
+    tol: number,
+  ): { v: number[]; h: number[] } => {
+    const v: number[] = []
+    const h: number[] = []
+    const xs = [box.x, box.x + box.width / 2, box.x + box.width]
+    const ys = [box.y, box.y + box.height / 2, box.y + box.height]
+    for (const c of xs) for (const t of lines.x) if (Math.abs(c - t) <= tol) v.push(t)
+    for (const c of ys) for (const t of lines.y) if (Math.abs(c - t) <= tol) h.push(t)
+    return { v, h }
+  }
+
   const move = (pointer: Vec2, shift: boolean, alt: boolean) => {
     if (!mode || !activeId) return
     const id = activeId
@@ -50,11 +71,16 @@ export const useDragResize = () => {
         x: mode.startEl.x + d.x,
         y: mode.startEl.y + d.y,
       }
+      const lines = combinedLines(id)
       const snapped =
         mode.startEl.rotate === 0 && snapThreshold > 0
-          ? snapDrag(ensureBox(proposed), buildSnapLines(store.schema), snapThreshold)
+          ? snapDrag(ensureBox(proposed), lines, snapThreshold)
           : { x: proposed.x, y: proposed.y }
       const next = { ...proposed, x: snapped.x, y: snapped.y }
+      const m = snapThreshold > 0
+        ? detectMatches({ x: next.x, y: next.y, width: next.width, height: next.height }, lines, 0.5)
+        : { v: [], h: [] }
+      setSmartGuides(Array.from(new Set(m.v)), Array.from(new Set(m.h)))
       store.updateInteraction((draft) => {
         const i = draft.elements.findIndex((e) => e.id === id)
         if (i !== -1) draft.elements[i] = next
@@ -62,9 +88,12 @@ export const useDragResize = () => {
     } else if (mode.kind === 'resize') {
       const d = canvasDelta(mode.startPointer, pointer)
       let resized = resizeBox(ensureBox(mode.startEl), mode.handle, d.x, d.y, shift)
+      const lines = combinedLines(id)
       if (mode.startEl.rotate === 0 && snapThreshold > 0 && !shift) {
-        resized = snapResize(resized, mode.handle, buildSnapLines(store.schema), snapThreshold)
+        resized = snapResize(resized, mode.handle, lines, snapThreshold)
       }
+      const m = snapThreshold > 0 ? detectMatches(resized, lines, 0.5) : { v: [], h: [] }
+      setSmartGuides(Array.from(new Set(m.v)), Array.from(new Set(m.h)))
       store.updateInteraction((draft) => {
         const i = draft.elements.findIndex((e) => e.id === id)
         if (i === -1) return
@@ -99,6 +128,7 @@ export const useDragResize = () => {
     mode = null
     activeId = null
     unlockSelection()
+    clearSmartGuides()
     removeListeners()
   }
 
@@ -108,6 +138,7 @@ export const useDragResize = () => {
     mode = null
     activeId = null
     unlockSelection()
+    clearSmartGuides()
     removeListeners()
   }
 

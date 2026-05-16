@@ -1,4 +1,4 @@
-import type { SpreadSchema } from '@/types/element'
+import type { ElementId, SpreadElement, SpreadSchema } from '@/types/element'
 import { rightPageX } from './elementFactory'
 import { MIN_DIM, type HandleKey } from './geometry'
 import type { Box } from './transform'
@@ -6,6 +6,21 @@ import type { Box } from './transform'
 export interface SnapLines {
   x: number[]
   y: number[]
+}
+
+export const buildElementSnapLines = (
+  schema: SpreadSchema,
+  excludeId: ElementId | null,
+): SnapLines => {
+  const xs: number[] = []
+  const ys: number[] = []
+  for (const el of schema.elements as SpreadElement[]) {
+    if (el.id === excludeId || el.hidden) continue
+    if (el.rotate !== 0) continue
+    xs.push(el.x, el.x + el.width / 2, el.x + el.width)
+    ys.push(el.y, el.y + el.height / 2, el.y + el.height)
+  }
+  return { x: xs, y: ys }
 }
 
 export const buildSnapLines = (schema: SpreadSchema): SnapLines => {
@@ -97,8 +112,8 @@ export const snapResize = (
   if (threshold <= 0) return box
   const movesLeft = handle === 'nw' || handle === 'sw' || handle === 'w'
   const movesRight = handle === 'ne' || handle === 'se' || handle === 'e'
-  const movesTop = handle === 'nw' || handle === 'ne'
-  const movesBottom = handle === 'sw' || handle === 'se'
+  const movesTop = handle === 'nw' || handle === 'ne' || handle === 'n'
+  const movesBottom = handle === 'sw' || handle === 'se' || handle === 's'
 
   let { x, y, width, height } = box
   if (movesRight) {

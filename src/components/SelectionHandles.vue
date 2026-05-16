@@ -26,16 +26,24 @@ interface ResizeHandle { x: number; y: number; key: HandleKey; cursor: string }
 const resizeHandles = computed<ResizeHandle[]>(() => {
   const w = props.element.width
   const h = props.element.height
-  return [
+  const all: ResizeHandle[] = [
     { x: 0, y: 0, key: 'nw', cursor: 'nwse-resize' },
-    { x: 0, y: h, key: 'sw', cursor: 'nesw-resize' },
+    { x: w / 2, y: 0, key: 'n', cursor: 'ns-resize' },
+    { x: w, y: 0, key: 'ne', cursor: 'nesw-resize' },
+    { x: w, y: h / 2, key: 'e', cursor: 'ew-resize' },
     { x: w, y: h, key: 'se', cursor: 'nwse-resize' },
+    { x: w / 2, y: h, key: 's', cursor: 'ns-resize' },
+    { x: 0, y: h, key: 'sw', cursor: 'nesw-resize' },
+    { x: 0, y: h / 2, key: 'w', cursor: 'ew-resize' },
   ]
+  if (isText.value) return all.filter((h) => h.key !== 'n' && h.key !== 's')
+  return all
 })
 
+const rotateOffset = computed(() => 22 / store.zoom)
 const rotateHandlePos = computed(() => ({
-  x: props.element.width,
-  y: 0,
+  x: props.element.width / 2,
+  y: -rotateOffset.value,
 }))
 
 const startResize = (e: PointerEvent, key: HandleKey) => {
@@ -112,12 +120,21 @@ const rotateCursor =
       @dblclick="onResizeDoubleClick"
     />
 
-    <rect
+    <line
+      :x1="props.element.width / 2"
+      :y1="0"
+      :x2="rotateHandlePos.x"
+      :y2="rotateHandlePos.y + handleSize / 2"
+      stroke="#d4a85f"
+      :stroke-width="stroke"
+      vector-effect="non-scaling-stroke"
+      pointer-events="none"
+    />
+    <circle
       class="handle"
-      :x="rotateHandlePos.x - handleSize / 2"
-      :y="rotateHandlePos.y - handleSize / 2"
-      :width="handleSize"
-      :height="handleSize"
+      :cx="rotateHandlePos.x"
+      :cy="rotateHandlePos.y"
+      :r="handleSize / 2"
       :style="{ cursor: rotateCursor, fill: '#d4a85f' }"
       @pointerenter="hoveringHandle = true"
       @pointerleave="hoveringHandle = false"
