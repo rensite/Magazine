@@ -3,6 +3,7 @@ import { computed, onMounted, provide, ref, watch } from 'vue'
 import EditorCanvas from '@/components/EditorCanvas.vue'
 import Toolbar from '@/components/Toolbar.vue'
 import PageSettingsPanel from '@/components/PageSettingsPanel.vue'
+import Inspector from '@/components/Inspector.vue'
 import AuthGate from '@/components/AuthGate.vue'
 import SpreadsMenu from '@/components/SpreadsMenu.vue'
 import PrintView from '@/components/PrintView.vue'
@@ -209,6 +210,34 @@ watch(
 )
 
 const headerTitle = computed(() => current.value?.title ?? store.title)
+
+const PANELS_KEY = 'stan:panels'
+type PanelsState = { pageSettings: boolean; inspector: boolean }
+const loadPanels = (): PanelsState => {
+  try {
+    const raw = localStorage.getItem(PANELS_KEY)
+    if (!raw) return { pageSettings: true, inspector: true }
+    return { pageSettings: true, inspector: true, ...(JSON.parse(raw) as Partial<PanelsState>) }
+  } catch {
+    return { pageSettings: true, inspector: true }
+  }
+}
+const panels = ref<PanelsState>(loadPanels())
+watch(
+  panels,
+  (v) => { try { localStorage.setItem(PANELS_KEY, JSON.stringify(v)) } catch { /* ignore */ } },
+  { deep: true },
+)
+const togglePageSettings = () => { panels.value.pageSettings = !panels.value.pageSettings }
+const toggleInspector = () => { panels.value.inspector = !panels.value.inspector }
+
+const onKey = (e: KeyboardEvent) => {
+  const target = e.target as HTMLElement | null
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+  if (e.key === 'p' || e.key === 'P') { togglePageSettings(); e.preventDefault() }
+  if (e.key === 'i' || e.key === 'I') { toggleInspector(); e.preventDefault() }
+}
+onMounted(() => window.addEventListener('keydown', onKey))
 </script>
 
 <template>
@@ -277,7 +306,14 @@ VITE_SUPABASE_ASSETS_BUCKET=spread-assets</pre>
           >Save</button>
         </div>
       </header>
-      <Toolbar :spread-id="current?.id ?? null" :user-id="auth.user?.id ?? null" />
+      <Toolbar
+        :spread-id="current?.id ?? null"
+        :user-id="auth.user?.id ?? null"
+        :inspector-open="panels.inspector"
+        :page-settings-open="panels.pageSettings"
+        @toggle-inspector="toggleInspector"
+        @toggle-page-settings="togglePageSettings"
+      />
       <main class="flex flex-1 overflow-hidden">
         <div class="flex-1 overflow-hidden">
           <EditorCanvas v-if="current" />
@@ -286,7 +322,8 @@ VITE_SUPABASE_ASSETS_BUCKET=spread-assets</pre>
             <span v-else>Загрузка…</span>
           </div>
         </div>
-        <PageSettingsPanel v-if="current" />
+        <Inspector v-if="current && panels.inspector" />
+        <PageSettingsPanel v-if="current && panels.pageSettings" />
       </main>
     </template>
   </div>
