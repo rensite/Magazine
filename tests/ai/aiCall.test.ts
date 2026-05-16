@@ -243,6 +243,74 @@ describe('aiGenerateImage', () => {
   })
 })
 
+describe('Gemini 429 retry honors retryDelay', () => {
+  it('parses Google retryDelay, waits, and succeeds on the retry', async () => {
+    vi.useFakeTimers()
+    try {
+      let calls = 0
+      mockFetch(() => {
+        calls++
+        if (calls === 1) {
+          // Realistic 429 body from Google Generative Language API.
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: 429,
+                status: 'RESOURCE_EXHAUSTED',
+                message: 'quota',
+                details: [{ '@type': '.../RetryInfo', retryDelay: '2s' }],
+              },
+            }),
+            { status: 429, statusText: 'Too Many Requests' },
+          )
+        }
+        return jsonResponse(200, {
+          candidates: [{ content: { parts: [{ text: 'ok' }] } }],
+        })
+      })
+      const p = aiCall('hi', {
+        task: 'vision',
+        images: [{ url: 'http://x/y.jpg' }],
+        // Disable the cross-provider fallback so we exercise the in-provider
+        // retry rather than skipping to Claude.
+        enableFallback: false,
+      })
+      // The retry sleeps ~2.25s; advance just past that.
+      await vi.advanceTimersByTimeAsync(3000)
+      const out = await p
+      expect(out.data).toBe('ok')
+      expect(calls).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('throws ProviderError after a 2nd 429 (no infinite retry)', async () => {
+    vi.useFakeTimers()
+    try {
+      mockFetch(() =>
+        new Response(
+          JSON.stringify({ error: { code: 429, details: [{ retryDelay: '1s' }] } }),
+          { status: 429, statusText: 'Too Many Requests' },
+        ),
+      )
+      const p = aiCall('hi', {
+        task: 'vision',
+        images: [{ url: 'http://x/y.jpg' }],
+        enableFallback: false,
+      })
+      // Attach the assertion BEFORE advancing the clock — otherwise the
+      // rejection settles during the timer tick and Vitest flags it as
+      // an unhandled rejection.
+      const assertion = expect(p).rejects.toThrowError(/429/)
+      await vi.advanceTimersByTimeAsync(2000)
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('aiCall — model override', () => {
   it('embeds the user-configured Gemini model into the request URL', async () => {
     setModelOverride('gemini', 'gemini-3-flash-preview')
