@@ -106,23 +106,41 @@ onBeforeUnmount(() => {
   <span v-else class="text-[10px] text-ink-500" title="Web Speech API недоступен">Mic n/a</span>
 
   <Teleport to="body">
-    <div v-if="listening && interim" class="pointer-events-none fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded bg-ink-800/90 px-4 py-2 text-sm text-ink-100 shadow-lg">
-      {{ interim }}
-    </div>
-    <div class="pointer-events-none fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
-      <div
-        v-for="t in toasts"
-        :key="t.id"
-        class="pointer-events-auto rounded px-3 py-2 text-xs shadow-lg"
-        :class="{
-          'bg-emerald-700 text-emerald-50': t.tone === 'ok',
-          'bg-amber-700 text-amber-50': t.tone === 'warn',
-          'bg-red-700 text-red-50': t.tone === 'err',
-        }"
-      >
-        <div>{{ t.text }}</div>
-        <div v-if="t.sub" class="mt-0.5 text-[10px] opacity-80">{{ t.sub }}</div>
+    <Transition
+      enter-active-class="transition-all duration-150 ease-out"
+      leave-active-class="transition-all duration-100 ease-in"
+      enter-from-class="opacity-0 translate-y-2"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0 translate-y-2"
+    >
+      <div v-if="listening && interim" class="pointer-events-none fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded bg-ink-900/90 px-4 py-2 text-sm text-ink-100 shadow-lg ring-1 ring-white/5">
+        {{ interim }}
       </div>
+    </Transition>
+    <div class="pointer-events-none fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
+      <TransitionGroup
+        enter-active-class="transition-all duration-150 ease-out"
+        leave-active-class="transition-all duration-150 ease-in"
+        enter-from-class="opacity-0 translate-y-2 scale-95"
+        enter-to-class="opacity-100 translate-y-0 scale-100"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0 -translate-y-1 scale-95"
+      >
+        <div
+          v-for="t in toasts"
+          :key="t.id"
+          class="pointer-events-auto rounded px-3 py-2 text-xs shadow-lg ring-1 ring-white/10"
+          :class="{
+            'bg-emerald-700 text-emerald-50': t.tone === 'ok',
+            'bg-amber-700 text-amber-50': t.tone === 'warn',
+            'bg-red-700 text-red-50': t.tone === 'err',
+          }"
+        >
+          <div>{{ t.text }}</div>
+          <div v-if="t.sub" class="mt-0.5 text-[10px] opacity-80">{{ t.sub }}</div>
+        </div>
+      </TransitionGroup>
     </div>
   </Teleport>
 </template>

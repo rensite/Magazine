@@ -81,7 +81,7 @@ watch(
 
 <template>
   <aside class="flex h-full w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-ink-700 bg-ink-800 p-4 text-sm text-ink-100">
-    <h2 class="font-serif italic text-accent">Page</h2>
+    <h2 class="font-serif italic text-gold">Page</h2>
 
     <section class="flex flex-col gap-2">
       <label class="text-xs text-ink-300">Preset</label>
@@ -102,7 +102,7 @@ watch(
           v-for="u in (['mm', 'px', 'in'] as Unit[])"
           :key="u"
           class="flex-1 rounded px-2 py-1 text-xs"
-          :class="unit === u ? 'bg-accent text-ink-900' : 'bg-ink-700 hover:bg-ink-600'"
+          :class="unit === u ? 'bg-accent text-white' : 'bg-ink-700 hover:bg-ink-600'"
           @click="setUnit(u)"
         >{{ u }}</button>
       </div>
@@ -113,12 +113,12 @@ watch(
       <div class="flex gap-1">
         <button
           class="flex-1 rounded px-2 py-1 text-xs"
-          :class="store.schema.orientation === 'portrait' ? 'bg-accent text-ink-900' : 'bg-ink-700 hover:bg-ink-600'"
+          :class="store.schema.orientation === 'portrait' ? 'bg-accent text-white' : 'bg-ink-700 hover:bg-ink-600'"
           @click="setOrientation('portrait')"
         >Portrait</button>
         <button
           class="flex-1 rounded px-2 py-1 text-xs"
-          :class="store.schema.orientation === 'landscape' ? 'bg-accent text-ink-900' : 'bg-ink-700 hover:bg-ink-600'"
+          :class="store.schema.orientation === 'landscape' ? 'bg-accent text-white' : 'bg-ink-700 hover:bg-ink-600'"
           @click="setOrientation('landscape')"
         >Landscape</button>
       </div>
@@ -135,13 +135,13 @@ watch(
       <div class="flex gap-1">
         <button
           class="flex-1 rounded px-2 py-1 text-xs"
-          :class="editingSide === 'left' ? 'bg-accent text-ink-900' : 'bg-ink-700 hover:bg-ink-600'"
+          :class="editingSide === 'left' ? 'bg-accent text-white' : 'bg-ink-700 hover:bg-ink-600'"
           :disabled="store.schema.mirrorPages"
           @click="editingSide = 'left'"
         >Left</button>
         <button
           class="flex-1 rounded px-2 py-1 text-xs"
-          :class="editingSide === 'right' ? 'bg-accent text-ink-900' : 'bg-ink-700 hover:bg-ink-600'"
+          :class="editingSide === 'right' ? 'bg-accent text-white' : 'bg-ink-700 hover:bg-ink-600'"
           :disabled="store.schema.mirrorPages"
           @click="editingSide = 'right'"
         >Right</button>
@@ -214,7 +214,7 @@ watch(
       <div class="flex gap-1">
         <button v-for="t in (['paper', 'plain', 'image'] as const)" :key="t"
           class="flex-1 rounded px-2 py-1 text-xs"
-          :class="bg.type === t ? 'bg-accent text-ink-900' : 'bg-ink-700 hover:bg-ink-600'"
+          :class="bg.type === t ? 'bg-accent text-white' : 'bg-ink-700 hover:bg-ink-600'"
           @click="store.setBackground({ type: t })"
         >{{ t }}</button>
       </div>

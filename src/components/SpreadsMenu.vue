@@ -164,7 +164,7 @@ const chapterIndex = (id: string): number =>
       <div class="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-lg border border-ink-700 bg-ink-800 shadow-2xl">
         <div class="flex items-center justify-between border-b border-ink-700 px-5 py-3">
           <div class="flex items-center gap-3">
-            <span class="font-serif text-lg italic text-accent">Развороты</span>
+            <span class="font-serif text-lg italic text-gold">Развороты</span>
             <span class="text-xs text-ink-400">{{ list.length }} в {{ chapters.length }} главах</span>
           </div>
           <div class="flex items-center gap-2">

@@ -5,6 +5,7 @@ import { makeTextElement } from '@/utils/elementFactory'
 import { textDefaults } from '@/composables/useTextDefaults'
 import { useImageImport } from '@/composables/useImageImport'
 import VoiceMic from './VoiceMic.vue'
+import UiTooltip from './UiTooltip.vue'
 
 const props = defineProps<{
   spreadId: string | null
@@ -75,42 +76,54 @@ const onFiles = async (e: Event) => {
 
     <div class="mx-2 h-5 w-px bg-ink-600" />
 
-    <button
-      class="rounded px-2 py-1 text-ink-200 hover:bg-ink-700 disabled:opacity-30"
-      :disabled="!store.canUndo"
-      @click="store.undo()"
-      title="Undo (Cmd+Z)"
-    >↶</button>
-    <button
-      class="rounded px-2 py-1 text-ink-200 hover:bg-ink-700 disabled:opacity-30"
-      :disabled="!store.canRedo"
-      @click="store.redo()"
-      title="Redo (Cmd+Shift+Z)"
-    >↷</button>
+    <UiTooltip text="Отменить" hotkey="⌘Z">
+      <button
+        class="rounded px-2 py-1 text-ink-200 hover:bg-ink-700 disabled:opacity-30"
+        :disabled="!store.canUndo"
+        @click="store.undo()"
+      >↶</button>
+    </UiTooltip>
+    <UiTooltip text="Повторить" hotkey="⌘⇧Z">
+      <button
+        class="rounded px-2 py-1 text-ink-200 hover:bg-ink-700 disabled:opacity-30"
+        :disabled="!store.canRedo"
+        @click="store.redo()"
+      >↷</button>
+    </UiTooltip>
 
-    <div class="mx-2 h-5 w-px bg-ink-600" />
+    <div class="mx-2 h-5 w-px bg-divider" />
 
     <template v-if="selected">
-      <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.bringToFront(selected.id)">Front</button>
-      <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.sendToBack(selected.id)">Back</button>
-      <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.duplicateSelected()" title="Duplicate (Cmd+D)">Dup</button>
-      <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.removeElement(selected.id)">Del</button>
+      <UiTooltip text="На передний план">
+        <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.bringToFront(selected.id)">Front</button>
+      </UiTooltip>
+      <UiTooltip text="На задний план">
+        <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.sendToBack(selected.id)">Back</button>
+      </UiTooltip>
+      <UiTooltip text="Дублировать" hotkey="⌘D">
+        <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.duplicateSelected()">Dup</button>
+      </UiTooltip>
+      <UiTooltip text="Удалить" hotkey="⌫">
+        <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.removeElement(selected.id)">Del</button>
+      </UiTooltip>
     </template>
 
     <div class="ml-auto flex items-center gap-2">
       <VoiceMic />
-      <button
-        class="rounded px-2 py-1 text-xs"
-        :class="props.inspectorOpen ? 'bg-accent text-ink-900' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
-        @click="emit('toggle-inspector')"
-        title="Inspector (I)"
-      >Inspector</button>
-      <button
-        class="rounded px-2 py-1 text-xs"
-        :class="props.pageSettingsOpen ? 'bg-accent text-ink-900' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
-        @click="emit('toggle-page-settings')"
-        title="Page settings (P)"
-      >Page</button>
+      <UiTooltip text="Inspector" hotkey="I">
+        <button
+          class="rounded px-2 py-1 text-xs"
+          :class="props.inspectorOpen ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
+          @click="emit('toggle-inspector')"
+        >Inspector</button>
+      </UiTooltip>
+      <UiTooltip text="Параметры страницы" hotkey="P">
+        <button
+          class="rounded px-2 py-1 text-xs"
+          :class="props.pageSettingsOpen ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
+          @click="emit('toggle-page-settings')"
+        >Page</button>
+      </UiTooltip>
     </div>
   </div>
 </template>

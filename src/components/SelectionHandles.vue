@@ -13,13 +13,16 @@ const drag = useDragResize()
 const { pointerPos } = useCanvasPointer()
 const isText = computed(() => props.element.type === 'text')
 
+const ACCENT = '#0d99ff'
+const HANDLE_FILL = '#ffffff'
+
 const transform = computed(() => toSvgTransform(ensureBox(props.element)))
-const handleSize = computed(() => 10 / store.zoom)
-const stroke = computed(() => 1.5 / store.zoom)
+// Scale-invariant sizes: handles 7px on screen, lines 1px on screen.
+const handleSize = computed(() => 7 / store.zoom)
+const stroke = computed(() => 1 / store.zoom)
 
 const hoveringHandle = ref(false)
 const interacting = ref(false)
-const showFrame = computed(() => hoveringHandle.value || interacting.value)
 
 interface ResizeHandle { x: number; y: number; key: HandleKey; cursor: string }
 
@@ -40,7 +43,7 @@ const resizeHandles = computed<ResizeHandle[]>(() => {
   return all
 })
 
-const rotateOffset = computed(() => 22 / store.zoom)
+const rotateOffset = computed(() => 18 / store.zoom)
 const rotateHandlePos = computed(() => ({
   x: props.element.width / 2,
   y: -rotateOffset.value,
@@ -94,52 +97,82 @@ const rotateCursor =
 
 <template>
   <g :transform="transform" class="pointer-events-auto">
+    <!-- Selection frame: always visible, thin solid accent line. -->
     <rect
-      v-if="showFrame"
       :width="props.element.width"
       :height="props.element.height"
       fill="none"
-      stroke="#d4a85f"
+      :stroke="ACCENT"
       :stroke-width="stroke"
-      stroke-dasharray="4 4"
       vector-effect="non-scaling-stroke"
     />
 
-    <rect
-      v-for="hd in resizeHandles"
-      :key="hd.key"
-      class="handle"
-      :x="hd.x - handleSize / 2"
-      :y="hd.y - handleSize / 2"
-      :width="handleSize"
-      :height="handleSize"
-      :style="{ cursor: hd.cursor }"
-      @pointerenter="hoveringHandle = true"
-      @pointerleave="hoveringHandle = false"
-      @pointerdown="(e) => startResize(e, hd.key)"
-      @dblclick="onResizeDoubleClick"
-    />
+    <!-- Resize handles. Larger transparent hit area + small visible square. -->
+    <g v-for="hd in resizeHandles" :key="hd.key">
+      <!-- visible handle -->
+      <rect
+        :x="hd.x - handleSize / 2"
+        :y="hd.y - handleSize / 2"
+        :width="handleSize"
+        :height="handleSize"
+        :fill="HANDLE_FILL"
+        :stroke="ACCENT"
+        :stroke-width="stroke"
+        vector-effect="non-scaling-stroke"
+        :rx="0.5 / store.zoom"
+        pointer-events="none"
+      />
+      <!-- enlarged hit area (~14px) -->
+      <rect
+        class="handle"
+        :x="hd.x - handleSize"
+        :y="hd.y - handleSize"
+        :width="handleSize * 2"
+        :height="handleSize * 2"
+        fill="transparent"
+        :style="{ cursor: hd.cursor }"
+        @pointerenter="hoveringHandle = true"
+        @pointerleave="hoveringHandle = false"
+        @pointerdown="(e) => startResize(e, hd.key)"
+        @dblclick="onResizeDoubleClick"
+      />
+    </g>
 
-    <line
-      :x1="props.element.width / 2"
-      :y1="0"
-      :x2="rotateHandlePos.x"
-      :y2="rotateHandlePos.y + handleSize / 2"
-      stroke="#d4a85f"
-      :stroke-width="stroke"
-      vector-effect="non-scaling-stroke"
-      pointer-events="none"
-    />
-    <circle
-      class="handle"
-      :cx="rotateHandlePos.x"
-      :cy="rotateHandlePos.y"
-      :r="handleSize / 2"
-      :style="{ cursor: rotateCursor, fill: '#d4a85f' }"
-      @pointerenter="hoveringHandle = true"
-      @pointerleave="hoveringHandle = false"
-      @pointerdown="startRotate"
-      @dblclick="onRotateDoubleClick"
-    />
+    <!-- Rotation handle: only when not interacting; subtle. -->
+    <g v-if="!interacting">
+      <line
+        :x1="props.element.width / 2"
+        :y1="0"
+        :x2="rotateHandlePos.x"
+        :y2="rotateHandlePos.y + handleSize / 2"
+        :stroke="ACCENT"
+        :stroke-width="stroke"
+        vector-effect="non-scaling-stroke"
+        pointer-events="none"
+        opacity="0.55"
+      />
+      <circle
+        :cx="rotateHandlePos.x"
+        :cy="rotateHandlePos.y"
+        :r="handleSize / 2"
+        :fill="HANDLE_FILL"
+        :stroke="ACCENT"
+        :stroke-width="stroke"
+        vector-effect="non-scaling-stroke"
+        pointer-events="none"
+      />
+      <circle
+        class="handle"
+        :cx="rotateHandlePos.x"
+        :cy="rotateHandlePos.y"
+        :r="handleSize"
+        fill="transparent"
+        :style="{ cursor: rotateCursor }"
+        @pointerenter="hoveringHandle = true"
+        @pointerleave="hoveringHandle = false"
+        @pointerdown="startRotate"
+        @dblclick="onRotateDoubleClick"
+      />
+    </g>
   </g>
 </template>

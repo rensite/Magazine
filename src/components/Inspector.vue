@@ -8,6 +8,7 @@ import { fitTextToFrame } from '@/utils/textFit'
 import FontPicker from './FontPicker.vue'
 import ColorPicker from './ColorPicker.vue'
 import LayersPanel from './LayersPanel.vue'
+import NumberField from './NumberField.vue'
 
 const store = useSpreadStore()
 const selected = computed(() => store.selected)
@@ -22,25 +23,20 @@ const setFontFamily = (name: string) => {
   rememberTextStyle({ fontFamily: name })
 }
 
-const setFontSize = (e: Event) => {
-  if (!textSelected.value) return
-  const v = parseFloat((e.target as HTMLInputElement).value)
-  if (!Number.isFinite(v)) return
+const setFontSize = (v: number) => {
+  if (!textSelected.value || !Number.isFinite(v)) return
   store.updateElement(textSelected.value.id, { fontSize: v })
   rememberTextStyle({ fontSize: v })
 }
 
-const setLineHeight = (e: Event) => {
-  if (!textSelected.value) return
-  const v = parseFloat((e.target as HTMLInputElement).value)
-  if (!Number.isFinite(v)) return
+const setLineHeight = (v: number) => {
+  if (!textSelected.value || !Number.isFinite(v)) return
   store.updateElement(textSelected.value.id, { lineHeight: v })
   rememberTextStyle({ lineHeight: v })
 }
 
-const setLetterSpacing = (e: Event) => {
+const setLetterSpacing = (v: number) => {
   if (!textSelected.value) return
-  const v = parseFloat((e.target as HTMLInputElement).value)
   store.updateElement(textSelected.value.id, { letterSpacing: Number.isFinite(v) ? v : 0 })
 }
 
@@ -87,10 +83,8 @@ const setOpacity = (e: Event) => {
   store.updateElement(selected.value.id, { opacity: parseFloat((e.target as HTMLInputElement).value) })
 }
 
-const setPos = (axis: 'x' | 'y' | 'width' | 'height' | 'rotate', e: Event) => {
-  if (!selected.value) return
-  const v = parseFloat((e.target as HTMLInputElement).value)
-  if (!Number.isFinite(v)) return
+const setPos = (axis: 'x' | 'y' | 'width' | 'height' | 'rotate', v: number) => {
+  if (!selected.value || !Number.isFinite(v)) return
   store.updateElement(selected.value.id, { [axis]: v })
 }
 
@@ -107,27 +101,12 @@ const availableWeights = computed(() => {
     <template v-if="selected">
       <section>
         <h3 class="mb-2 text-[10px] uppercase tracking-wide text-ink-400">Position</h3>
-        <div class="grid grid-cols-2 gap-2">
-          <label class="text-xs text-ink-300">
-            X
-            <input type="number" class="mt-1 w-full rounded bg-ink-700 px-2 py-1 text-ink-100" :value="Math.round(selected.x)" @change="(e) => setPos('x', e)" />
-          </label>
-          <label class="text-xs text-ink-300">
-            Y
-            <input type="number" class="mt-1 w-full rounded bg-ink-700 px-2 py-1 text-ink-100" :value="Math.round(selected.y)" @change="(e) => setPos('y', e)" />
-          </label>
-          <label class="text-xs text-ink-300">
-            W
-            <input type="number" class="mt-1 w-full rounded bg-ink-700 px-2 py-1 text-ink-100" :value="Math.round(selected.width)" @change="(e) => setPos('width', e)" />
-          </label>
-          <label class="text-xs text-ink-300">
-            H
-            <input type="number" class="mt-1 w-full rounded bg-ink-700 px-2 py-1 text-ink-100" :value="Math.round(selected.height)" @change="(e) => setPos('height', e)" />
-          </label>
-          <label class="col-span-2 text-xs text-ink-300">
-            Rotation
-            <input type="number" class="mt-1 w-full rounded bg-ink-700 px-2 py-1 text-ink-100" :value="Math.round(selected.rotate)" @change="(e) => setPos('rotate', e)" />
-          </label>
+        <div class="grid grid-cols-2 gap-1.5">
+          <NumberField label="X" :model-value="selected.x" @update:model-value="(v) => setPos('x', v)" />
+          <NumberField label="Y" :model-value="selected.y" @update:model-value="(v) => setPos('y', v)" />
+          <NumberField label="W" :min="1" :model-value="selected.width" @update:model-value="(v) => setPos('width', v)" />
+          <NumberField label="H" :min="1" :model-value="selected.height" @update:model-value="(v) => setPos('height', v)" />
+          <NumberField class="col-span-2" label="↻" :model-value="selected.rotate" unit="°" @update:model-value="(v) => setPos('rotate', v)" />
         </div>
       </section>
 
@@ -152,43 +131,34 @@ const availableWeights = computed(() => {
             :key="w"
             type="button"
             class="rounded px-2 py-1 text-[10px]"
-            :class="(textSelected.fontWeight ?? 400) === w ? 'bg-accent text-ink-900' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
+            :class="(textSelected.fontWeight ?? 400) === w ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
             @click="setWeight(w)"
           >{{ w }}</button>
           <button
             type="button"
             class="rounded px-2 py-1 text-xs italic"
-            :class="textSelected.italic ? 'bg-accent text-ink-900' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
+            :class="textSelected.italic ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
             @click="toggleItalic"
           >I</button>
           <button
             type="button"
             class="rounded px-2 py-1 text-xs underline"
-            :class="textSelected.underline ? 'bg-accent text-ink-900' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
+            :class="textSelected.underline ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
             @click="toggleUnderline"
           >U</button>
         </div>
 
         <div class="mt-2 grid grid-cols-3 gap-1">
-          <button type="button" class="rounded px-2 py-1 text-xs" :class="textSelected.align === 'left' ? 'bg-accent text-ink-900' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'" @click="setAlign('left')">⟵</button>
-          <button type="button" class="rounded px-2 py-1 text-xs" :class="textSelected.align === 'center' ? 'bg-accent text-ink-900' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'" @click="setAlign('center')">↔</button>
-          <button type="button" class="rounded px-2 py-1 text-xs" :class="textSelected.align === 'right' ? 'bg-accent text-ink-900' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'" @click="setAlign('right')">⟶</button>
+          <button type="button" class="rounded px-2 py-1 text-xs" :class="textSelected.align === 'left' ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'" @click="setAlign('left')">⟵</button>
+          <button type="button" class="rounded px-2 py-1 text-xs" :class="textSelected.align === 'center' ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'" @click="setAlign('center')">↔</button>
+          <button type="button" class="rounded px-2 py-1 text-xs" :class="textSelected.align === 'right' ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'" @click="setAlign('right')">⟶</button>
         </div>
 
-        <div class="mt-2 grid grid-cols-2 gap-2">
-          <label class="text-xs text-ink-300">
-            Size
-            <input type="number" min="4" max="600" step="1" class="mt-1 w-full rounded bg-ink-700 px-2 py-1 text-ink-100" :value="textSelected.fontSize" @change="setFontSize" />
-          </label>
-          <label class="text-xs text-ink-300">
-            Line H
-            <input type="number" min="0.6" max="3" step="0.05" class="mt-1 w-full rounded bg-ink-700 px-2 py-1 text-ink-100" :value="textSelected.lineHeight" @change="setLineHeight" />
-          </label>
-          <label class="text-xs text-ink-300">
-            Tracking
-            <input type="number" step="0.1" class="mt-1 w-full rounded bg-ink-700 px-2 py-1 text-ink-100" :value="textSelected.letterSpacing ?? 0" @change="setLetterSpacing" />
-          </label>
-          <div class="flex items-end">
+        <div class="mt-2 grid grid-cols-2 gap-1.5">
+          <NumberField label="Size" :min="4" :max="600" :model-value="textSelected.fontSize" @update:model-value="setFontSize" />
+          <NumberField label="Line" :min="0.6" :max="3" :step="0.05" :precision="2" :scrub-step="0.01" :model-value="textSelected.lineHeight" @update:model-value="setLineHeight" />
+          <NumberField label="Track" :step="0.1" :precision="1" :scrub-step="0.1" :model-value="textSelected.letterSpacing ?? 0" @update:model-value="setLetterSpacing" />
+          <div class="flex items-center justify-end">
             <ColorPicker :model-value="textSelected.color" @update:model-value="setColor" />
           </div>
         </div>

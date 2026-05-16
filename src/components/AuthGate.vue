@@ -14,7 +14,7 @@ const submit = () => {
 <template>
   <div class="flex h-full w-full items-center justify-center bg-ink-900">
     <div class="w-full max-w-sm rounded-lg border border-ink-700 bg-ink-800 p-6 shadow-2xl">
-      <h1 class="font-serif text-xl italic text-accent">Stan Book Editor</h1>
+      <h1 class="font-serif text-xl italic text-gold">Stan Book Editor</h1>
       <p class="mt-2 text-sm text-ink-300">
         Введи email — пришлём ссылку для входа.
       </p>

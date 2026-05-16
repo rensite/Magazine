@@ -23,6 +23,21 @@ export const buildElementSnapLines = (
   return { x: xs, y: ys }
 }
 
+export interface SiblingBox { x: number; y: number; width: number; height: number }
+
+export const siblingBoxes = (
+  schema: SpreadSchema,
+  excludeId: ElementId | null,
+): SiblingBox[] => {
+  const out: SiblingBox[] = []
+  for (const el of schema.elements as SpreadElement[]) {
+    if (el.id === excludeId || el.hidden) continue
+    if (el.rotate !== 0) continue
+    out.push({ x: el.x, y: el.y, width: el.width, height: el.height })
+  }
+  return out
+}
+
 export const buildSnapLines = (schema: SpreadSchema): SnapLines => {
   const xs: number[] = []
   const ys: number[] = []

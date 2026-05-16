@@ -4,8 +4,16 @@ import { useSpreadStore } from '@/stores/spreadStore'
 import { useCanvasPointer } from './useCanvasPointer'
 import { resizeBox, snapAngle, type HandleKey } from '@/utils/geometry'
 import { ensureBox, type Vec2 } from '@/utils/transform'
-import { buildElementSnapLines, buildSnapLines, snapDrag, snapResize, type SnapLines } from '@/utils/snap'
-import { clearSmartGuides, setSmartGuides } from './useSmartGuides'
+import {
+  buildElementSnapLines,
+  buildSnapLines,
+  siblingBoxes,
+  snapDrag,
+  snapResize,
+  type SiblingBox,
+  type SnapLines,
+} from '@/utils/snap'
+import { clearSmartGuides, setSmartGuides, type GuideLabel } from './useSmartGuides'
 
 const SNAP_PX = 6
 
@@ -60,6 +68,68 @@ export const useDragResize = () => {
     return { v, h }
   }
 
+  // For each matched vertical line X, find the nearest sibling whose
+  // bbox touches X (left/center/right edge) and emit a label that
+  // shows the vertical pixel gap between the moving box and that
+  // sibling. Same idea for horizontal matches.
+  const buildLabels = (
+    box: { x: number; y: number; width: number; height: number },
+    matchesV: number[],
+    matchesH: number[],
+    sibs: SiblingBox[],
+    tol: number,
+  ): GuideLabel[] => {
+    const labels: GuideLabel[] = []
+    const seen = new Set<string>()
+    const push = (l: GuideLabel) => {
+      const key = `${Math.round(l.x)}|${Math.round(l.y)}|${l.text}`
+      if (seen.has(key)) return
+      seen.add(key)
+      labels.push(l)
+    }
+
+    const movingBottom = box.y + box.height
+    const movingRight = box.x + box.width
+
+    for (const x of matchesV) {
+      for (const s of sibs) {
+        const xs = [s.x, s.x + s.width / 2, s.x + s.width]
+        if (!xs.some((v) => Math.abs(v - x) <= tol)) continue
+        const sb = s.y + s.height
+        let gap: number | null = null
+        let labelY = 0
+        if (sb <= box.y) {
+          gap = box.y - sb
+          labelY = (sb + box.y) / 2
+        } else if (movingBottom <= s.y) {
+          gap = s.y - movingBottom
+          labelY = (movingBottom + s.y) / 2
+        }
+        if (gap !== null && gap > 0.5) push({ x: x + 4, y: labelY, text: `${Math.round(gap)}` })
+      }
+    }
+
+    for (const y of matchesH) {
+      for (const s of sibs) {
+        const ys = [s.y, s.y + s.height / 2, s.y + s.height]
+        if (!ys.some((v) => Math.abs(v - y) <= tol)) continue
+        const sr = s.x + s.width
+        let gap: number | null = null
+        let labelX = 0
+        if (sr <= box.x) {
+          gap = box.x - sr
+          labelX = (sr + box.x) / 2
+        } else if (movingRight <= s.x) {
+          gap = s.x - movingRight
+          labelX = (movingRight + s.x) / 2
+        }
+        if (gap !== null && gap > 0.5) push({ x: labelX, y: y - 6, text: `${Math.round(gap)}` })
+      }
+    }
+
+    return labels
+  }
+
   const move = (pointer: Vec2, shift: boolean, alt: boolean) => {
     if (!mode || !activeId) return
     const id = activeId
@@ -77,10 +147,11 @@ export const useDragResize = () => {
           ? snapDrag(ensureBox(proposed), lines, snapThreshold)
           : { x: proposed.x, y: proposed.y }
       const next = { ...proposed, x: snapped.x, y: snapped.y }
-      const m = snapThreshold > 0
-        ? detectMatches({ x: next.x, y: next.y, width: next.width, height: next.height }, lines, 0.5)
-        : { v: [], h: [] }
-      setSmartGuides(Array.from(new Set(m.v)), Array.from(new Set(m.h)))
+      const movingBox = { x: next.x, y: next.y, width: next.width, height: next.height }
+      const m = snapThreshold > 0 ? detectMatches(movingBox, lines, 0.5) : { v: [], h: [] }
+      const sibs = snapThreshold > 0 ? siblingBoxes(store.schema, id) : []
+      const labels = sibs.length > 0 ? buildLabels(movingBox, m.v, m.h, sibs, 0.5) : []
+      setSmartGuides(Array.from(new Set(m.v)), Array.from(new Set(m.h)), labels)
       store.updateInteraction((draft) => {
         const i = draft.elements.findIndex((e) => e.id === id)
         if (i !== -1) draft.elements[i] = next
@@ -93,7 +164,9 @@ export const useDragResize = () => {
         resized = snapResize(resized, mode.handle, lines, snapThreshold)
       }
       const m = snapThreshold > 0 ? detectMatches(resized, lines, 0.5) : { v: [], h: [] }
-      setSmartGuides(Array.from(new Set(m.v)), Array.from(new Set(m.h)))
+      const sibs = snapThreshold > 0 ? siblingBoxes(store.schema, id) : []
+      const labels = sibs.length > 0 ? buildLabels(resized, m.v, m.h, sibs, 0.5) : []
+      setSmartGuides(Array.from(new Set(m.v)), Array.from(new Set(m.h)), labels)
       store.updateInteraction((draft) => {
         const i = draft.elements.findIndex((e) => e.id === id)
         if (i === -1) return
