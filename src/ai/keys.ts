@@ -24,6 +24,7 @@ import { reactive } from 'vue'
 import { MissingKeyError, type ProviderId } from './types'
 
 const STORAGE_KEY = 'stan:ai-keys/v1'
+const MODELS_STORAGE_KEY = 'stan:ai-models/v1'
 
 const ENV_VARS: Record<ProviderId, string> = {
   claude: 'VITE_ANTHROPIC_API_KEY',
@@ -161,10 +162,86 @@ export const keysState = (): Readonly<Bag> => {
   return state.runtime
 }
 
+// =========================================================================
+// Model overrides
+//
+// Each provider has a hard-coded default model ID in its provider module,
+// but quota limits, preview-channel rollouts, and per-account access make
+// the "right" model a moving target. Letting the user paste an override
+// in Settings means we don't have to ship a code change every time Google
+// renames a Gemini preview.
+// =========================================================================
+
+const modelState: {
+  overrides: Partial<Record<ProviderId, string>>
+  hydrated: boolean
+} = { overrides: {}, hydrated: false }
+
 /** Test-only seam — older signature kept for backwards compat with PR 2/3/4 tests. */
 export const __setEnvForTests = (bag: Record<string, string | undefined> | null): void => {
   envOverride = bag
   // Also wipe runtime so tests see a clean slate.
   for (const p of Object.keys(state.runtime) as ProviderId[]) delete state.runtime[p]
+  for (const p of Object.keys(modelState.overrides) as ProviderId[]) delete modelState.overrides[p]
   state.hydrated = true // skip localStorage in tests
+  modelState.hydrated = true
+}
+
+const hydrateModels = (): void => {
+  if (modelState.hydrated) return
+  modelState.hydrated = true
+  if (typeof localStorage === 'undefined') return
+  try {
+    const raw = localStorage.getItem(MODELS_STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw) as Partial<Record<ProviderId, string>>
+    for (const provider of ['claude', 'gemini', 'grok'] as ProviderId[]) {
+      const value = parsed[provider]
+      if (typeof value === 'string' && value.length > 0) {
+        modelState.overrides[provider] = value
+      }
+    }
+  } catch {
+    try {
+      localStorage.removeItem(MODELS_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+const persistModels = (): void => {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(MODELS_STORAGE_KEY, JSON.stringify(modelState.overrides))
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Return the user-configured model override for a provider, or undefined
+ * if the provider should use its built-in default. Provider modules call
+ * this on every request — keep the lookup cheap.
+ */
+export const getModelOverride = (provider: ProviderId): string | undefined => {
+  hydrateModels()
+  return modelState.overrides[provider]
+}
+
+export const setModelOverride = (provider: ProviderId, model: string): void => {
+  hydrateModels()
+  const trimmed = model.trim()
+  if (!trimmed) {
+    delete modelState.overrides[provider]
+  } else {
+    modelState.overrides[provider] = trimmed
+  }
+  persistModels()
+}
+
+/** Read-only view for the Settings UI. */
+export const modelOverridesState = (): Readonly<Partial<Record<ProviderId, string>>> => {
+  hydrateModels()
+  return modelState.overrides
 }

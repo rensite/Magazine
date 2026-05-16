@@ -6,7 +6,9 @@ import {
   hasKey,
   keysState,
   keysStatus,
+  modelOverridesState,
   setKey,
+  setModelOverride,
 } from '@/ai/keys'
 import { MissingKeyError, ProviderError, type ProviderId } from '@/ai/types'
 
@@ -20,6 +22,10 @@ interface ProviderRow {
   href: string
   /** Optional sub-line under the label. */
   note: string
+  /** Default model used when override is empty — shown as placeholder. */
+  defaultModel: string
+  /** Sample alt models worth trying. */
+  modelHint: string
 }
 
 const providers: ProviderRow[] = [
@@ -29,6 +35,8 @@ const providers: ProviderRow[] = [
     placeholder: 'sk-ant-…',
     href: 'https://console.anthropic.com/settings/keys',
     note: 'Text analyst, story angles, editor personas.',
+    defaultModel: 'claude-3-5-sonnet-latest',
+    modelHint: 'e.g. claude-3-5-sonnet-latest, claude-3-5-haiku-latest',
   },
   {
     id: 'gemini',
@@ -36,6 +44,8 @@ const providers: ProviderRow[] = [
     placeholder: 'AIza…',
     href: 'https://aistudio.google.com/app/apikey',
     note: 'Image analysis (vision), image generation fallback.',
+    defaultModel: 'gemini-3-pro-preview',
+    modelHint: 'e.g. gemini-3-pro-preview, gemini-3-flash-preview (higher quota)',
   },
   {
     id: 'grok',
@@ -43,6 +53,8 @@ const providers: ProviderRow[] = [
     placeholder: 'xai-…',
     href: 'https://console.x.ai',
     note: 'Fallback for text + primary for image generation.',
+    defaultModel: 'grok-2-latest',
+    modelHint: 'e.g. grok-2-latest, grok-2-vision-latest',
   },
 ]
 
@@ -51,6 +63,13 @@ const drafts = ref<Record<ProviderId, string>>({
   claude: keysState().claude ?? '',
   gemini: keysState().gemini ?? '',
   grok: keysState().grok ?? '',
+})
+
+// Same pattern for model overrides — separate buffer, committed on Save.
+const modelDrafts = ref<Record<ProviderId, string>>({
+  claude: modelOverridesState().claude ?? '',
+  gemini: modelOverridesState().gemini ?? '',
+  grok: modelOverridesState().grok ?? '',
 })
 
 // Mask state per provider.
@@ -76,6 +95,7 @@ const status = computed(() => keysStatus())
 const save = () => {
   for (const p of providers) {
     setKey(p.id, drafts.value[p.id] ?? '')
+    setModelOverride(p.id, modelDrafts.value[p.id] ?? '')
   }
   emit('close')
 }
@@ -93,8 +113,11 @@ const clearAll = () => {
 }
 
 const testProvider = async (id: ProviderId) => {
-  // Persist the draft before testing so the provider call uses it.
+  // Persist BOTH drafts before testing — model override must be live too,
+  // otherwise the test would hit the default model and the user can't
+  // verify the value they just pasted.
   setKey(id, drafts.value[id] ?? '')
+  setModelOverride(id, modelDrafts.value[id] ?? '')
   if (!hasKey(id)) {
     testState.value[id] = { status: 'failed', message: 'Ключ не указан' }
     return
@@ -199,6 +222,20 @@ const testProvider = async (id: ProviderId) => {
                 title="Удалить"
                 @click="clearOne(p.id)"
               >🗑</button>
+            </div>
+
+            <div class="mt-2">
+              <label class="mb-1 block text-[10px] uppercase tracking-wide text-ink-500">
+                Модель (опционально, переопределит дефолт)
+              </label>
+              <input
+                v-model="modelDrafts[p.id]"
+                :placeholder="p.defaultModel"
+                spellcheck="false"
+                autocomplete="off"
+                class="w-full rounded bg-ink-900 px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-accent"
+              />
+              <p class="mt-1 text-[10px] text-ink-500">{{ p.modelHint }}</p>
             </div>
 
             <p

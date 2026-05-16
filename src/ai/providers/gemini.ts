@@ -8,7 +8,7 @@ import {
   type Provider,
   ProviderError,
 } from '../types'
-import { getKey } from '../keys'
+import { getKey, getModelOverride } from '../keys'
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 // Gemini 3 only. 2.0 endpoints return errors against current Google API
@@ -113,7 +113,10 @@ export const geminiProvider: Provider = {
     const apiKey = getKey('gemini')
     const streaming = !!onToken
     const hasImages = messages.some((m) => m.images?.length)
-    const model = hasImages ? VISION_MODEL : TEXT_MODEL
+    // User-configured override (Settings UI) wins over the hard-coded default.
+    // Same override applies to both text and vision since Gemini 3 is unified
+    // multimodal — separate override per task would just be a footgun.
+    const model = getModelOverride('gemini') ?? (hasImages ? VISION_MODEL : TEXT_MODEL)
     const path = streaming ? 'streamGenerateContent' : 'generateContent'
     const url = `${BASE}/models/${model}:${path}?key=${apiKey}${streaming ? '&alt=sse' : ''}`
     const sys = system ?? systemFromMessages(messages)
@@ -141,15 +144,24 @@ export const geminiProvider: Provider = {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '')
-      // 404 on the model path is almost always a wrong model ID — surface
-      // a clear, actionable hint instead of the raw Google error blob.
-      const hint =
-        res.status === 404 && text.includes('is not found')
-          ? ` (Hint: model "${model}" doesn't exist on your account. Open browser console and run: (await import('@/ai/providers/gemini')).listAvailableModels() to see what's available.)`
-          : ''
+      const hints: string[] = []
+      if (res.status === 404 && text.includes('is not found')) {
+        hints.push(
+          `Model "${model}" doesn't exist on your account. Run listGeminiModels() from devtools, then set the override in Settings.`,
+        )
+      }
+      if (res.status === 429) {
+        hints.push(
+          `Quota exhausted on "${model}". Try a flash-variant in Settings (e.g. gemini-3-flash-preview) — preview Pro models have ~5 RPM on free tier.`,
+        )
+      }
+      const hintStr = hints.length ? ` (Hint: ${hints.join(' ')})` : ''
+      // 429 is "retriable" for the standard router fallback chain — let
+      // the vision-task fallback to Claude→Grok kick in instead of waiting
+      // for Google to refill the quota bucket.
       throw new ProviderError(
         'gemini',
-        `${res.status} ${res.statusText}: ${text.slice(0, 200)}${hint}`,
+        `${res.status} ${res.statusText}: ${text.slice(0, 200)}${hintStr}`,
         undefined,
         res.status >= 500 || res.status === 429,
       )

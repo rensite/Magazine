@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { aiCall, aiGenerateImage } from '@/ai'
 import { ProviderError, StructuredOutputError } from '@/ai/types'
-import { __setEnvForTests } from '@/ai/keys'
+import { __setEnvForTests, setModelOverride } from '@/ai/keys'
 
 // Helper: build a JSON Response that fetch would return.
 const jsonResponse = (status: number, body: unknown): Response =>
@@ -240,6 +240,34 @@ describe('aiGenerateImage', () => {
     )
     const img = await aiGenerateImage('a cat', { provider: 'gemini' })
     expect(img.servedBy).toBe('gemini')
+  })
+})
+
+describe('aiCall — model override', () => {
+  it('embeds the user-configured Gemini model into the request URL', async () => {
+    setModelOverride('gemini', 'gemini-3-flash-preview')
+    let capturedUrl = ''
+    mockFetch((url) => {
+      capturedUrl = url
+      return jsonResponse(200, {
+        candidates: [{ content: { parts: [{ text: 'ok' }] } }],
+      })
+    })
+    await aiCall('hi', { task: 'vision', images: [{ url: 'http://x/y.jpg' }] })
+    expect(capturedUrl).toContain('gemini-3-flash-preview:generateContent')
+  })
+
+  it('passes the configured Claude model in the request body', async () => {
+    setModelOverride('claude', 'claude-3-5-haiku-latest')
+    let capturedBody = ''
+    mockFetch((_url, init) => {
+      capturedBody = (init?.body as string) ?? ''
+      return jsonResponse(200, {
+        content: [{ type: 'text', text: 'ok' }],
+      })
+    })
+    await aiCall('hi', { task: 'analyst' })
+    expect(capturedBody).toContain('claude-3-5-haiku-latest')
   })
 })
 

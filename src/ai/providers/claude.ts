@@ -7,7 +7,7 @@ import {
   type Provider,
   ProviderError,
 } from '../types'
-import { getKey } from '../keys'
+import { getKey, getModelOverride } from '../keys'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
@@ -114,7 +114,7 @@ export const claudeProvider: Provider = {
     const sys = system ?? systemFromMessages(messages)
 
     const body = {
-      model: DEFAULT_MODEL,
+      model: getModelOverride('claude') ?? DEFAULT_MODEL,
       max_tokens: maxTokens ?? 4096,
       temperature: temperature ?? 0.7,
       stream: streaming,

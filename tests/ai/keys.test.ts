@@ -3,10 +3,13 @@ import {
   __setEnvForTests,
   clearAllKeys,
   getKey,
+  getModelOverride,
   hasKey,
   keysState,
   keysStatus,
+  modelOverridesState,
   setKey,
+  setModelOverride,
 } from '@/ai/keys'
 import { MissingKeyError } from '@/ai/types'
 
@@ -108,5 +111,40 @@ describe('keysState reactivity', () => {
     expect(bag.claude).toBe('rt-claude')
     expect(bag.grok).toBe('rt-grok')
     expect(bag.gemini).toBeUndefined()
+  })
+})
+
+describe('model overrides', () => {
+  it('returns undefined when nothing is set', () => {
+    expect(getModelOverride('gemini')).toBeUndefined()
+  })
+
+  it('setModelOverride round-trips and persists to localStorage', () => {
+    setModelOverride('gemini', 'gemini-3-flash-preview')
+    expect(getModelOverride('gemini')).toBe('gemini-3-flash-preview')
+    const raw = localStorage.getItem('stan:ai-models/v1')
+    expect(raw).toBeTruthy()
+    expect(raw!).toContain('gemini-3-flash-preview')
+  })
+
+  it('empty string clears the override', () => {
+    setModelOverride('claude', 'claude-3-5-haiku-latest')
+    expect(getModelOverride('claude')).toBe('claude-3-5-haiku-latest')
+    setModelOverride('claude', '')
+    expect(getModelOverride('claude')).toBeUndefined()
+  })
+
+  it('trims whitespace', () => {
+    setModelOverride('grok', '  grok-2-vision-latest  ')
+    expect(getModelOverride('grok')).toBe('grok-2-vision-latest')
+  })
+
+  it('modelOverridesState returns the current bag', () => {
+    setModelOverride('claude', 'a')
+    setModelOverride('gemini', 'b')
+    const bag = modelOverridesState()
+    expect(bag.claude).toBe('a')
+    expect(bag.gemini).toBe('b')
+    expect(bag.grok).toBeUndefined()
   })
 })

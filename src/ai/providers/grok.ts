@@ -8,7 +8,7 @@ import {
   type Provider,
   ProviderError,
 } from '../types'
-import { getKey } from '../keys'
+import { getKey, getModelOverride } from '../keys'
 
 const BASE = 'https://api.x.ai/v1'
 const TEXT_MODEL = 'grok-2-latest'
@@ -111,7 +111,7 @@ export const grokProvider: Provider = {
     const apiKey = getKey('grok')
     const streaming = !!onToken
     const hasImages = messages.some((m) => m.images?.length)
-    const model = hasImages ? VISION_MODEL : TEXT_MODEL
+    const model = getModelOverride('grok') ?? (hasImages ? VISION_MODEL : TEXT_MODEL)
     const sys = system ?? systemFromMessages(messages)
 
     const body = {
