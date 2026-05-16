@@ -28,7 +28,10 @@ describe('migrateSchema', () => {
       elements: [],
     })
     const v2Again = migrateSchema(v2In)
-    expect(v2Again).toBe(v2In)
+    // migrateSchema is intentionally non-mutating: it spreads into a fresh
+    // object so callers can't accidentally share state. Identity is not
+    // preserved; shape is.
+    expect(v2Again).toStrictEqual(v2In)
   })
 
   it('falls back to empty schema for garbage input', () => {
