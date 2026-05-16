@@ -44,8 +44,8 @@ const providers: ProviderRow[] = [
     placeholder: 'AIza…',
     href: 'https://aistudio.google.com/app/apikey',
     note: 'Image analysis (vision), image generation fallback.',
-    defaultModel: 'gemini-3-pro-preview',
-    modelHint: 'e.g. gemini-3-pro-preview, gemini-3-flash-preview (higher quota)',
+    defaultModel: 'gemini-3-flash-preview',
+    modelHint: 'e.g. gemini-3-flash-preview (default), gemini-3-pro-preview (higher quality, lower quota)',
   },
   {
     id: 'grok',

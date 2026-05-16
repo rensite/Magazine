@@ -11,13 +11,15 @@ import {
 import { getKey, getModelOverride } from '../keys'
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
-// Gemini 3 only. 2.0 endpoints return errors against current Google API
-// — do NOT downgrade. The `-latest` alias does NOT exist for v3, so we
-// pin to the preview channel ID. If this 404s, run listAvailableModels()
-// from the browser console with your key and update these constants.
-// See CLAUDE.md (project root) for rationale.
-const TEXT_MODEL = 'gemini-3-pro-preview'
-const VISION_MODEL = 'gemini-3-pro-preview'
+// Gemini 3 only. 2.0 endpoints return errors against current Google API.
+// Default: flash, NOT pro. Pro-preview is severely rate-limited on free
+// tier (~5 RPM) and 429s under normal generator load. Flash has ×30–50
+// quota and is plenty for editorial vision tasks. Users who want pro
+// quality can override per-provider in Settings.
+// If this 404s, run listAvailableModels() from devtools, then update
+// these constants OR override in Settings. See CLAUDE.md for rationale.
+const TEXT_MODEL = 'gemini-3-flash-preview'
+const VISION_MODEL = 'gemini-3-flash-preview'
 const IMAGE_MODEL = 'imagen-3.0-generate-002'
 
 interface GeminiPart {
