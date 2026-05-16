@@ -1,5 +1,5 @@
 export type ElementId = string
-export type FontFamily = 'mono' | 'serif' | 'hand'
+export type FontFamily = string
 export type Unit = 'mm' | 'px' | 'in'
 export type Orientation = 'portrait' | 'landscape'
 export type PageSide = 'left' | 'right'
@@ -12,6 +12,9 @@ export interface BaseElement {
   height: number
   rotate: number
   opacity: number
+  locked?: boolean
+  hidden?: boolean
+  name?: string
 }
 
 export interface TextElement extends BaseElement {
@@ -23,6 +26,10 @@ export interface TextElement extends BaseElement {
   align: 'left' | 'center' | 'right'
   lineHeight: number
   autoWidth: boolean
+  fontWeight?: number
+  italic?: boolean
+  underline?: boolean
+  letterSpacing?: number
 }
 
 export interface ImageElement extends BaseElement {
