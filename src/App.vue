@@ -4,6 +4,9 @@ import EditorCanvas from '@/components/EditorCanvas.vue'
 import Toolbar from '@/components/Toolbar.vue'
 import PageSettingsPanel from '@/components/PageSettingsPanel.vue'
 import Inspector from '@/components/Inspector.vue'
+import CommandPalette from '@/components/CommandPalette.vue'
+import ContextMenu from '@/components/ContextMenu.vue'
+import SelectionToolbar from '@/components/SelectionToolbar.vue'
 import AuthGate from '@/components/AuthGate.vue'
 import SpreadsMenu from '@/components/SpreadsMenu.vue'
 import PrintView from '@/components/PrintView.vue'
@@ -345,6 +348,9 @@ VITE_SUPABASE_ASSETS_BUCKET=spread-assets</pre>
           <PageSettingsPanel v-if="current && panels.pageSettings" />
         </Transition>
       </main>
+      <CommandPalette />
+      <ContextMenu />
+      <SelectionToolbar v-if="current" />
     </template>
   </div>
 </template>

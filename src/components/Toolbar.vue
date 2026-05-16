@@ -6,6 +6,7 @@ import { textDefaults } from '@/composables/useTextDefaults'
 import { useImageImport } from '@/composables/useImageImport'
 import VoiceMic from './VoiceMic.vue'
 import UiTooltip from './UiTooltip.vue'
+import Icon from './Icon.vue'
 
 const props = defineProps<{
   spreadId: string | null
@@ -54,75 +55,51 @@ const onFiles = async (e: Event) => {
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-2 border-b border-ink-700 bg-ink-800 px-3 py-2 text-sm">
-    <button
-      class="rounded bg-ink-700 px-3 py-1 text-ink-100 hover:bg-ink-600"
-      @click="addText"
-    >+ Text</button>
-    <button
-      class="rounded bg-ink-700 px-3 py-1 text-ink-100 hover:bg-ink-600 disabled:opacity-50"
-      :disabled="importing"
-      @click="onPickImage"
-    >{{ importing ? '…' : '+ Image' }}</button>
-    <input
-      ref="fileInput"
-      type="file"
-      accept="image/*"
-      multiple
-      class="hidden"
-      @change="onFiles"
-    />
-    <span v-if="importError" class="text-xs text-red-400">{{ importError }}</span>
+  <div class="flex flex-wrap items-center gap-0.5 border-b border-divider bg-ink-800 px-2 py-1.5 text-sm">
+    <UiTooltip text="Добавить текст">
+      <button class="rounded p-1.5 text-ink-200 hover:bg-ink-700" @click="addText"><Icon name="type" /></button>
+    </UiTooltip>
+    <UiTooltip text="Добавить картинку">
+      <button class="rounded p-1.5 text-ink-200 hover:bg-ink-700 disabled:opacity-50" :disabled="importing" @click="onPickImage">
+        <Icon name="image" />
+      </button>
+    </UiTooltip>
+    <input ref="fileInput" type="file" accept="image/*" multiple class="hidden" @change="onFiles" />
+    <span v-if="importError" class="ml-1 text-xs text-red-400">{{ importError }}</span>
 
-    <div class="mx-2 h-5 w-px bg-ink-600" />
+    <div class="mx-1.5 h-5 w-px bg-divider" />
 
     <UiTooltip text="Отменить" hotkey="⌘Z">
-      <button
-        class="rounded px-2 py-1 text-ink-200 hover:bg-ink-700 disabled:opacity-30"
-        :disabled="!store.canUndo"
-        @click="store.undo()"
-      >↶</button>
+      <button class="rounded p-1.5 text-ink-200 hover:bg-ink-700 disabled:opacity-30" :disabled="!store.canUndo" @click="store.undo()"><Icon name="undo" /></button>
     </UiTooltip>
     <UiTooltip text="Повторить" hotkey="⌘⇧Z">
-      <button
-        class="rounded px-2 py-1 text-ink-200 hover:bg-ink-700 disabled:opacity-30"
-        :disabled="!store.canRedo"
-        @click="store.redo()"
-      >↷</button>
+      <button class="rounded p-1.5 text-ink-200 hover:bg-ink-700 disabled:opacity-30" :disabled="!store.canRedo" @click="store.redo()"><Icon name="redo" /></button>
     </UiTooltip>
 
-    <div class="mx-2 h-5 w-px bg-divider" />
+    <div class="mx-1.5 h-5 w-px bg-divider" />
 
     <template v-if="selected">
       <UiTooltip text="На передний план">
-        <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.bringToFront(selected.id)">Front</button>
+        <button class="rounded p-1.5 text-ink-200 hover:bg-ink-700" @click="store.bringToFront(selected.id)"><Icon name="bringFront" /></button>
       </UiTooltip>
       <UiTooltip text="На задний план">
-        <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.sendToBack(selected.id)">Back</button>
+        <button class="rounded p-1.5 text-ink-200 hover:bg-ink-700" @click="store.sendToBack(selected.id)"><Icon name="sendBack" /></button>
       </UiTooltip>
       <UiTooltip text="Дублировать" hotkey="⌘D">
-        <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.duplicateSelected()">Dup</button>
+        <button class="rounded p-1.5 text-ink-200 hover:bg-ink-700" @click="store.duplicateSelected()"><Icon name="duplicate" /></button>
       </UiTooltip>
       <UiTooltip text="Удалить" hotkey="⌫">
-        <button class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600" @click="store.removeElement(selected.id)">Del</button>
+        <button class="rounded p-1.5 text-ink-200 hover:bg-ink-700" @click="store.removeElement(selected.id)"><Icon name="trash" /></button>
       </UiTooltip>
     </template>
 
-    <div class="ml-auto flex items-center gap-2">
+    <div class="ml-auto flex items-center gap-0.5">
       <VoiceMic />
       <UiTooltip text="Inspector" hotkey="I">
-        <button
-          class="rounded px-2 py-1 text-xs"
-          :class="props.inspectorOpen ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
-          @click="emit('toggle-inspector')"
-        >Inspector</button>
+        <button class="rounded p-1.5" :class="props.inspectorOpen ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="emit('toggle-inspector')"><Icon name="inspector" /></button>
       </UiTooltip>
       <UiTooltip text="Параметры страницы" hotkey="P">
-        <button
-          class="rounded px-2 py-1 text-xs"
-          :class="props.pageSettingsOpen ? 'bg-accent text-white' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
-          @click="emit('toggle-page-settings')"
-        >Page</button>
+        <button class="rounded p-1.5" :class="props.pageSettingsOpen ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="emit('toggle-page-settings')"><Icon name="page" /></button>
       </UiTooltip>
     </div>
   </div>
