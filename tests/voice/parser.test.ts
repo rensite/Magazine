@@ -77,4 +77,33 @@ describe('parseCommand', () => {
     const r = parseCommand('ibm plex sans', { selected: txt })
     expect(r.patch.fontFamily).toBe('IBM Plex Sans')
   })
+
+  it('bare number is fontSize for text', () => {
+    const r = parseCommand('14 красный жирный sans', { selected: txt })
+    expect(r.patch).toMatchObject({
+      fontSize: 14,
+      color: '#dc2626',
+      fontWeight: 700,
+      fontFamily: 'Inter',
+    })
+  })
+
+  it('spelled-out bare number for text', () => {
+    const r = parseCommand('двадцать четыре', { selected: txt })
+    expect(r.patch.fontSize).toBe(24)
+  })
+
+  it('bare number does NOT apply to image', () => {
+    const r = parseCommand('14', { selected: img })
+    expect(r.patch.fontSize).toBeUndefined()
+    expect(r.unknown).toContain('14')
+  })
+
+  it('explicit trigger still wins over bare-number heuristic', () => {
+    const r = parseCommand('размер 18 24 красный', { selected: txt })
+    // First number consumed by "размер", second left as unknown
+    // (we only auto-fill fontSize once).
+    expect(r.patch.fontSize).toBe(18)
+    expect(r.patch.color).toBe('#dc2626')
+  })
 })

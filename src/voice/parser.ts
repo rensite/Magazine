@@ -248,7 +248,19 @@ export const parseCommand = (raw: string, ctx: ParseContext): ParsedCommand => {
       continue
     }
 
-    // ---- Bare number near "размер"/"шрифт" elsewhere: skip — only via trigger ----
+    // ---- Bare number ----
+    // If a number sits on its own and the user is targeting a text element,
+    // interpret it as fontSize ("14 красный жирный" -> size 14).
+    // For non-text elements a bare number is ambiguous so we leave it.
+    {
+      const num = readNumberAt(tokens, i)
+      if (num && selectedType === 'text' && patch.fontSize === undefined) {
+        patch.fontSize = num.value
+        recognized.push(`размер ${num.value}`)
+        i += num.consumed
+        continue
+      }
+    }
 
     // ---- Font family phrase ----
     const family = consumeFontPhrase(tokens, i)

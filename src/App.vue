@@ -14,6 +14,7 @@ import { supabaseSpreadService } from '@/services/spreadService'
 import { usePersistence } from '@/composables/usePersistence'
 import { useImageUrls } from '@/composables/useImageUrls'
 import { useKeyboardShortcuts } from '@/composables/useKeyboardShortcuts'
+import { useClipboardTextPaste } from '@/composables/useClipboardTextPaste'
 import { cacheGet, isCacheNewer } from '@/services/localCache'
 import { emptySchema } from '@/utils/elementFactory'
 import type { ChapterRecord, SpreadRecord, SpreadSchema } from '@/types/element'
@@ -30,6 +31,7 @@ const imageUrls = useImageUrls(supabaseSpreadService)
 provide('imageUrls', imageUrls.urls)
 
 useKeyboardShortcuts({ onSave: () => void persistence.forceSave('manual') })
+useClipboardTextPaste()
 
 interface SpreadSummary {
   id: string
