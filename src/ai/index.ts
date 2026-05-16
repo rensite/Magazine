@@ -268,3 +268,6 @@ export type {
   ProviderId,
 } from './types'
 export { ProviderError, StructuredOutputError, MissingKeyError } from './types'
+// Debug-only: list every Gemini model your API key has access to.
+// Call from the browser console: `(await import('@/ai')).listGeminiModels()`
+export { listAvailableModels as listGeminiModels } from './providers/gemini'

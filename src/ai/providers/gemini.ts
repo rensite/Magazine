@@ -12,9 +12,12 @@ import { getKey } from '../keys'
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 // Gemini 3 only. 2.0 endpoints return errors against current Google API
-// — do NOT downgrade. See CLAUDE.md (project root) for rationale.
-const TEXT_MODEL = 'gemini-3-pro-latest'
-const VISION_MODEL = 'gemini-3-pro-latest'
+// — do NOT downgrade. The `-latest` alias does NOT exist for v3, so we
+// pin to the preview channel ID. If this 404s, run listAvailableModels()
+// from the browser console with your key and update these constants.
+// See CLAUDE.md (project root) for rationale.
+const TEXT_MODEL = 'gemini-3-pro-preview'
+const VISION_MODEL = 'gemini-3-pro-preview'
 const IMAGE_MODEL = 'imagen-3.0-generate-002'
 
 interface GeminiPart {
@@ -138,9 +141,15 @@ export const geminiProvider: Provider = {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '')
+      // 404 on the model path is almost always a wrong model ID — surface
+      // a clear, actionable hint instead of the raw Google error blob.
+      const hint =
+        res.status === 404 && text.includes('is not found')
+          ? ` (Hint: model "${model}" doesn't exist on your account. Open browser console and run: (await import('@/ai/providers/gemini')).listAvailableModels() to see what's available.)`
+          : ''
       throw new ProviderError(
         'gemini',
-        `${res.status} ${res.statusText}: ${text.slice(0, 200)}`,
+        `${res.status} ${res.statusText}: ${text.slice(0, 200)}${hint}`,
         undefined,
         res.status >= 500 || res.status === 429,
       )
@@ -206,4 +215,40 @@ export const geminiProvider: Provider = {
       servedBy: 'gemini',
     } as GeneratedImage
   },
+}
+
+/**
+ * Debug helper: lists every Gemini model the current API key has access
+ * to. Open the browser console while the app is running and call:
+ *
+ *   import('@/ai/providers/gemini').then(m => m.listAvailableModels()).then(console.log)
+ *
+ * Use this to discover the correct model ID when the configured one 404s.
+ * Returns an array of { name, displayName, supportedMethods } trimmed for
+ * readability — Google's full response is much chattier.
+ */
+export const listAvailableModels = async (): Promise<
+  Array<{ name: string; displayName?: string; supportedMethods: string[] }>
+> => {
+  const apiKey = getKey('gemini')
+  const res = await fetch(`${BASE}/models?key=${apiKey}&pageSize=200`)
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`listAvailableModels failed: ${res.status} ${text.slice(0, 200)}`)
+  }
+  const json = (await res.json()) as {
+    models?: Array<{
+      name?: string
+      displayName?: string
+      supportedGenerationMethods?: string[]
+    }>
+  }
+  return (json.models ?? [])
+    .map((m) => ({
+      name: (m.name ?? '').replace(/^models\//, ''),
+      displayName: m.displayName,
+      supportedMethods: m.supportedGenerationMethods ?? [],
+    }))
+    .filter((m) => m.name.startsWith('gemini-'))
+    .sort((a, b) => a.name.localeCompare(b.name))
 }
