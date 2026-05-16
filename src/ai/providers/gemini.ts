@@ -11,8 +11,10 @@ import {
 import { getKey } from '../keys'
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
-const TEXT_MODEL = 'gemini-2.0-flash'
-const VISION_MODEL = 'gemini-2.0-flash'
+// Gemini 3 only. 2.0 endpoints return errors against current Google API
+// — do NOT downgrade. See CLAUDE.md (project root) for rationale.
+const TEXT_MODEL = 'gemini-3-pro-latest'
+const VISION_MODEL = 'gemini-3-pro-latest'
 const IMAGE_MODEL = 'imagen-3.0-generate-002'
 
 interface GeminiPart {
