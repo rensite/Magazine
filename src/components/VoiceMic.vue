@@ -17,20 +17,26 @@ const pushToast = (tone: Toast['tone'], text: string, sub?: string) => {
 const store = useSpreadStore()
 
 const handleTranscript = (transcript: string) => {
-  const parsed = parseCommand(transcript, { selected: store.selected })
+  // When several elements of the same type are selected we still want
+  // type-sensitive parsing (alignment, bare-number = fontSize). Feed
+  // the primary element as the parse context.
+  const primary = store.selected ?? store.selectedAll[0] ?? null
+  const parsed = parseCommand(transcript, { selected: primary })
   const hasWork = Object.keys(parsed.patch).length > 0 || parsed.actions.length > 0
   if (!hasWork) {
     pushToast('warn', 'Не понял', transcript)
     return
   }
-  if (!store.selected && !parsed.actions.some((a) => a === 'undo' || a === 'redo')) {
+  if (store.selectedCount === 0 && !parsed.actions.some((a) => a === 'undo' || a === 'redo')) {
     pushToast('warn', 'Сначала выдели элемент', transcript)
     return
   }
   const res = executeCommand(parsed)
   pushToast(
     res.applied.length > 0 ? 'ok' : 'warn',
-    res.applied.length > 0 ? `✓ ${res.applied.join(', ')}` : 'ничего не применено',
+    res.applied.length > 0
+      ? `✓ ${res.applied.join(', ')}${store.selectedCount > 1 ? ` (×${store.selectedCount})` : ''}`
+      : 'ничего не применено',
     parsed.unknown.length > 0 ? `непонятно: ${parsed.unknown.join(' ')}` : undefined,
   )
 }

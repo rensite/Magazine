@@ -26,9 +26,11 @@ export const useCommands = () => {
   const store = useSpreadStore()
 
   const selected = computed(() => store.selected)
-  const hasSelection = () => store.selected !== null
-  const textSelected = () => store.selected !== null && isText(store.selected)
-  const imageSelected = () => store.selected !== null && isImage(store.selected)
+  const selectedAll = () => store.selectedAll
+  const hasSelection = () => store.selectedCount > 0
+  // text-context commands enable when every selected element is text
+  const allText = () => store.selectedCount > 0 && selectedAll().every((e) => isText(e))
+  const singleImage = () => store.selectedCount === 1 && store.selected !== null && isImage(store.selected)
 
   const list: Command[] = [
     // Insert
@@ -99,7 +101,7 @@ export const useCommands = () => {
       group: 'edit',
       hotkey: '⌫',
       enabled: hasSelection,
-      run: () => selected.value && store.removeElement(selected.value.id),
+      run: () => store.removeMany([...store.selectedIds]),
     },
     {
       id: 'edit.deselect',
@@ -109,53 +111,61 @@ export const useCommands = () => {
       enabled: hasSelection,
       run: () => store.select(null),
     },
-    // Arrange
+    {
+      id: 'edit.selectAll',
+      label: 'Select all',
+      group: 'edit',
+      hotkey: '⌘A',
+      run: () => store.selectAll(),
+    },
+    // Arrange — multi-aware: each call iterates the current selection.
     {
       id: 'arrange.front',
       label: 'Bring to front',
       group: 'arrange',
       enabled: hasSelection,
-      run: () => selected.value && store.bringToFront(selected.value.id),
+      run: () => { for (const el of selectedAll()) store.bringToFront(el.id) },
     },
     {
       id: 'arrange.back',
       label: 'Send to back',
       group: 'arrange',
       enabled: hasSelection,
-      run: () => selected.value && store.sendToBack(selected.value.id),
+      run: () => { for (const el of selectedAll().slice().reverse()) store.sendToBack(el.id) },
     },
     {
       id: 'arrange.lockToggle',
       label: 'Lock / unlock',
       group: 'arrange',
       enabled: hasSelection,
-      run: () => selected.value && store.toggleLock(selected.value.id),
+      run: () => { for (const el of selectedAll()) store.toggleLock(el.id) },
     },
     {
       id: 'arrange.hideToggle',
       label: 'Show / hide',
       group: 'arrange',
       enabled: hasSelection,
-      run: () => selected.value && store.toggleHidden(selected.value.id),
+      run: () => { for (const el of selectedAll()) store.toggleHidden(el.id) },
     },
-    // Text
+    // Text — operates on every selected text element.
     {
       id: 'text.fitFrame',
       label: 'Fit frame to text',
       group: 'text',
-      enabled: textSelected,
-      run: () => selected.value && store.fitFrameToText(selected.value.id),
+      enabled: allText,
+      run: () => { for (const el of selectedAll()) if (isText(el)) store.fitFrameToText(el.id) },
     },
     {
       id: 'text.fitText',
       label: 'Fit text to frame',
       group: 'text',
-      enabled: textSelected,
+      enabled: allText,
       run: () => {
-        const s = selected.value
-        if (!s || !isText(s)) return
-        const size = fitTextToFrame(s, s.width, s.height)
-        store.fitTextToFrame(s.id, size)
+        for (const el of selectedAll()) {
+          if (!isText(el)) continue
+          const size = fitTextToFrame(el, el.width, el.height)
+          store.fitTextToFrame(el.id, size)
+        }
       },
     },
     // Image
@@ -163,7 +173,7 @@ export const useCommands = () => {
       id: 'image.reset',
       label: 'Reset rotation & aspect',
       group: 'image',
-      enabled: imageSelected,
+      enabled: singleImage,
       run: () => selected.value && store.resetTransform(selected.value.id),
     },
   ]

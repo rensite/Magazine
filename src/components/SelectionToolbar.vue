@@ -23,8 +23,11 @@ const tick = ref(0)
 const editingText = ref(false)
 
 const selected = computed(() => store.selected)
+const selectedAll = computed(() => store.selectedAll)
+const count = computed(() => store.selectedCount)
 const textSelected = computed(() => (selected.value && isText(selected.value) ? selected.value : null))
 const imageSelected = computed(() => (selected.value && isImage(selected.value) ? selected.value : null))
+const allText = computed(() => count.value > 0 && selectedAll.value.every((e) => isText(e)))
 const { list: commands } = useCommands()
 const runById = (id: string) => commands.find((c) => c.id === id)?.run()
 
@@ -41,18 +44,23 @@ onBeforeUnmount(() => {
 
 const screenPos = computed(() => {
   tick.value // dep
-  const el = selected.value
   const root = container?.value
-  if (!el || !root) return null
-  const box = aabb(ensureBox(el))
+  if (!root || count.value === 0) return null
+  // Group bbox (axis-aligned) of all selected elements.
+  const boxes = selectedAll.value.map((el) => aabb(ensureBox(el)))
+  if (boxes.length === 0) return null
+  const minX = Math.min(...boxes.map((b) => b.minX))
+  const minY = Math.min(...boxes.map((b) => b.minY))
+  const maxX = Math.max(...boxes.map((b) => b.maxX))
   const rect = root.getBoundingClientRect()
-  const x = rect.left + store.pan.x + box.minX * store.zoom + ((box.maxX - box.minX) * store.zoom) / 2
-  const y = rect.top + store.pan.y + box.minY * store.zoom
+  const x = rect.left + store.pan.x + minX * store.zoom + ((maxX - minX) * store.zoom) / 2
+  const y = rect.top + store.pan.y + minY * store.zoom
   return { x, y }
 })
 
+const allLocked = computed(() => selectedAll.value.every((e) => e.locked))
 const visible = computed(() => {
-  return !!selected.value && !!screenPos.value && !editingText.value && !selected.value.locked
+  return count.value > 0 && !!screenPos.value && !editingText.value && !allLocked.value
 })
 
 // Detect inline text-editing mode (contenteditable focus on the
@@ -71,33 +79,33 @@ onBeforeUnmount(() => {
   window.removeEventListener('focusout', onFocusOut)
 })
 
+const textIds = computed(() => selectedAll.value.filter((e) => isText(e)).map((e) => e.id))
+const patchTexts = (patch: Partial<import('@/types/element').TextElement>) => {
+  if (textIds.value.length === 0) return
+  store.updateMany(textIds.value, patch)
+}
+
 const cycleWeight = () => {
-  const t = textSelected.value
-  if (!t) return
-  const cur = t.fontWeight ?? 400
+  // Toggle between 400 and 700 based on primary element's weight; bulk
+  // applies the same value to all selected texts.
+  const cur = (textSelected.value?.fontWeight ?? 400)
   const next = cur >= 700 ? 400 : 700
-  store.updateElement(t.id, { fontWeight: next })
+  patchTexts({ fontWeight: next })
 }
 const toggleItalic = () => {
-  const t = textSelected.value
-  if (!t) return
-  store.updateElement(t.id, { italic: !t.italic })
+  const cur = !!textSelected.value?.italic
+  patchTexts({ italic: !cur })
 }
 const toggleUnderline = () => {
-  const t = textSelected.value
-  if (!t) return
-  store.updateElement(t.id, { underline: !t.underline })
+  const cur = !!textSelected.value?.underline
+  patchTexts({ underline: !cur })
 }
 const setAlign = (align: 'left' | 'center' | 'right') => {
-  const t = textSelected.value
-  if (!t) return
-  store.updateElement(t.id, { align })
+  patchTexts({ align })
   rememberTextStyle({ align })
 }
 const setColor = (hex: string) => {
-  const t = textSelected.value
-  if (!t) return
-  store.updateElement(t.id, { color: hex })
+  patchTexts({ color: hex })
   rememberTextStyle({ color: hex })
 }
 </script>
@@ -118,41 +126,43 @@ const setColor = (hex: string) => {
         :style="{ left: `${screenPos.x}px`, top: `${screenPos.y}px` }"
       >
         <div class="flex items-center gap-0.5 rounded-md border border-divider bg-ink-800/95 px-1 py-1 shadow-xl ring-1 ring-white/5 backdrop-blur">
-          <template v-if="textSelected">
+          <span v-if="count > 1" class="px-1.5 text-[10px] text-ink-400">×{{ count }}</span>
+
+          <template v-if="allText">
             <UiTooltip text="Bold">
-              <button type="button" class="rounded px-2 py-0.5 text-xs font-bold" :class="(textSelected.fontWeight ?? 400) >= 700 ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="cycleWeight">B</button>
+              <button type="button" class="rounded px-2 py-0.5 text-xs font-bold" :class="(textSelected?.fontWeight ?? 400) >= 700 ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="cycleWeight">B</button>
             </UiTooltip>
             <UiTooltip text="Italic">
-              <button type="button" class="rounded px-2 py-0.5 text-xs italic" :class="textSelected.italic ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="toggleItalic">I</button>
+              <button type="button" class="rounded px-2 py-0.5 text-xs italic" :class="textSelected?.italic ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="toggleItalic">I</button>
             </UiTooltip>
             <UiTooltip text="Underline">
-              <button type="button" class="rounded px-2 py-0.5 text-xs underline" :class="textSelected.underline ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="toggleUnderline">U</button>
+              <button type="button" class="rounded px-2 py-0.5 text-xs underline" :class="textSelected?.underline ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="toggleUnderline">U</button>
             </UiTooltip>
 
             <div class="mx-1 h-4 w-px bg-divider" />
 
             <UiTooltip text="Align left">
-              <button type="button" class="rounded px-1.5 py-0.5 text-xs" :class="textSelected.align === 'left' ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="setAlign('left')">⟵</button>
+              <button type="button" class="rounded px-1.5 py-0.5 text-xs" :class="textSelected?.align === 'left' ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="setAlign('left')">⟵</button>
             </UiTooltip>
             <UiTooltip text="Align center">
-              <button type="button" class="rounded px-1.5 py-0.5 text-xs" :class="textSelected.align === 'center' ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="setAlign('center')">↔</button>
+              <button type="button" class="rounded px-1.5 py-0.5 text-xs" :class="textSelected?.align === 'center' ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="setAlign('center')">↔</button>
             </UiTooltip>
             <UiTooltip text="Align right">
-              <button type="button" class="rounded px-1.5 py-0.5 text-xs" :class="textSelected.align === 'right' ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="setAlign('right')">⟶</button>
+              <button type="button" class="rounded px-1.5 py-0.5 text-xs" :class="textSelected?.align === 'right' ? 'bg-accent text-white' : 'text-ink-200 hover:bg-ink-700'" @click="setAlign('right')">⟶</button>
             </UiTooltip>
 
             <div class="mx-1 h-4 w-px bg-divider" />
 
-            <ColorPicker :model-value="textSelected.color" @update:model-value="setColor" />
+            <ColorPicker :model-value="textSelected?.color ?? '#000000'" @update:model-value="setColor" />
           </template>
 
-          <template v-if="imageSelected">
+          <template v-if="count === 1 && imageSelected">
             <UiTooltip text="Reset rotation & aspect">
               <button type="button" class="rounded px-2 py-0.5 text-xs text-ink-200 hover:bg-ink-700" @click="runById('image.reset')">↺ reset</button>
             </UiTooltip>
           </template>
 
-          <div v-if="textSelected || imageSelected" class="mx-1 h-4 w-px bg-divider" />
+          <div v-if="allText || imageSelected" class="mx-1 h-4 w-px bg-divider" />
 
           <UiTooltip text="Duplicate" hotkey="⌘D">
             <button type="button" class="rounded px-2 py-0.5 text-xs text-ink-200 hover:bg-ink-700" @click="runById('edit.duplicate')">⎘</button>

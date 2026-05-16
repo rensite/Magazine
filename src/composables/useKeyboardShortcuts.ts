@@ -43,7 +43,7 @@ export const useKeyboardShortcuts = ({ onSave }: Handlers = {}) => {
     // text (contenteditable). A focused color picker or number input
     // shouldn't swallow these.
     if (!isInTextEdit(e.target)) {
-      if (cmd && e.key.toLowerCase() === 'c' && store.selectedId) {
+      if (cmd && e.key.toLowerCase() === 'c' && store.selectedCount > 0) {
         e.preventDefault()
         store.copySelected()
         return
@@ -53,18 +53,23 @@ export const useKeyboardShortcuts = ({ onSave }: Handlers = {}) => {
         store.paste()
         return
       }
-      if (cmd && e.key.toLowerCase() === 'd' && store.selectedId) {
+      if (cmd && e.key.toLowerCase() === 'd' && store.selectedCount > 0) {
         e.preventDefault()
         store.duplicateSelected()
+        return
+      }
+      if (cmd && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        store.selectAll()
         return
       }
     }
 
     if (isEditableTarget(e.target)) return
 
-    if ((e.key === 'Delete' || e.key === 'Backspace') && store.selectedId) {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && store.selectedCount > 0) {
       e.preventDefault()
-      store.removeElement(store.selectedId)
+      store.removeMany([...store.selectedIds])
     }
     if (e.key === 'Escape') {
       store.select(null)

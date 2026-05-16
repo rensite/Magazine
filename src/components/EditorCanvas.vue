@@ -94,12 +94,89 @@ const cursorClass = computed(() => {
   return ''
 })
 
+// Marquee selection: dragging from empty canvas builds a rectangle
+// and selects every visible, unrotated element whose aabb intersects.
+// Rotated elements still snap by their aabb — good enough for now.
+interface Marquee { x1: number; y1: number; x2: number; y2: number; additive: boolean; baseline: string[] }
+const marquee = ref<Marquee | null>(null)
+
+const marqueeStyle = computed(() => {
+  const m = marquee.value
+  if (!m) return null
+  const x = Math.min(m.x1, m.x2)
+  const y = Math.min(m.y1, m.y2)
+  const w = Math.abs(m.x2 - m.x1)
+  const h = Math.abs(m.y2 - m.y1)
+  return {
+    left: `${x * store.zoom + store.pan.x}px`,
+    top: `${y * store.zoom + store.pan.y}px`,
+    width: `${w * store.zoom}px`,
+    height: `${h * store.zoom}px`,
+  }
+})
+
+const intersects = (
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+): boolean =>
+  a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+
+const updateMarqueeSelection = () => {
+  const m = marquee.value
+  if (!m) return
+  const rect = {
+    x: Math.min(m.x1, m.x2),
+    y: Math.min(m.y1, m.y2),
+    w: Math.abs(m.x2 - m.x1),
+    h: Math.abs(m.y2 - m.y1),
+  }
+  if (rect.w < 1 || rect.h < 1) return
+  const hits: string[] = []
+  for (const el of store.elements) {
+    if (el.hidden) continue
+    if (intersects(rect, { x: el.x, y: el.y, w: el.width, h: el.height })) {
+      hits.push(el.id)
+    }
+  }
+  const nextIds = m.additive
+    ? Array.from(new Set([...m.baseline, ...hits]))
+    : hits
+  store.selectMany(nextIds)
+}
+
+const onMarqueeMove = (e: PointerEvent) => {
+  if (!marquee.value) return
+  const p = canvasFromClient(e.clientX, e.clientY)
+  marquee.value = { ...marquee.value, x2: p.x, y2: p.y }
+  updateMarqueeSelection()
+}
+const onMarqueeUp = () => {
+  if (!marquee.value) return
+  marquee.value = null
+  window.removeEventListener('pointermove', onMarqueeMove)
+  window.removeEventListener('pointerup', onMarqueeUp)
+  window.removeEventListener('pointercancel', onMarqueeUp)
+}
+
 const onCanvasPointerDown = (e: PointerEvent) => {
   vp.onPointerDown(e)
   if (e.defaultPrevented) return
-  if (e.target === e.currentTarget && e.button === 0) {
-    store.select(null)
+  if (e.target !== e.currentTarget || e.button !== 0) return
+  const additive = e.shiftKey || e.metaKey || e.ctrlKey
+  if (!additive) store.select(null)
+  // Start marquee.
+  const p = canvasFromClient(e.clientX, e.clientY)
+  marquee.value = {
+    x1: p.x,
+    y1: p.y,
+    x2: p.x,
+    y2: p.y,
+    additive,
+    baseline: additive ? [...store.selectedIds] : [],
   }
+  window.addEventListener('pointermove', onMarqueeMove)
+  window.addEventListener('pointerup', onMarqueeUp)
+  window.addEventListener('pointercancel', onMarqueeUp)
 }
 </script>
 
@@ -148,6 +225,13 @@ const onCanvasPointerDown = (e: PointerEvent) => {
         Drop image to import
       </div>
     </div>
+
+    <div
+      v-if="marqueeStyle"
+      class="pointer-events-none absolute border border-accent bg-accent-soft"
+      :style="marqueeStyle"
+    />
+
 
     <div
       class="pointer-events-none absolute bottom-2 right-3 select-text font-mono text-[10px] text-ink-500"

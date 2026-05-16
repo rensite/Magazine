@@ -40,14 +40,24 @@ const warningColor = computed(() =>
 
 const onPointerDown = (e: PointerEvent) => {
   if (isStatic) return
+  const additive = e.shiftKey || e.metaKey || e.ctrlKey
   if (props.element.locked) {
     e.stopPropagation()
-    store.select(props.element.id)
+    if (additive) store.toggleSelection(props.element.id)
+    else store.select(props.element.id)
     return
   }
   e.preventDefault()
   e.stopPropagation()
-  store.select(props.element.id)
+  if (additive) {
+    store.toggleSelection(props.element.id)
+    return
+  }
+  // Preserve the existing multi-selection if the user grabs an already
+  // selected member — lets them drag the whole group.
+  if (!store.selectedIds.includes(props.element.id)) {
+    store.select(props.element.id)
+  }
   drag.beginDrag({
     id: props.element.id,
     pointer: pointerPos(e),

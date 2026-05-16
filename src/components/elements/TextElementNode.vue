@@ -104,14 +104,22 @@ if (!isStatic) {
 const onPointerDown = (e: PointerEvent) => {
   if (isStatic) return
   if (editing.value) return
+  const additive = e.shiftKey || e.metaKey || e.ctrlKey
   if (props.element.locked) {
     e.stopPropagation()
-    store.select(props.element.id)
+    if (additive) store.toggleSelection(props.element.id)
+    else store.select(props.element.id)
     return
   }
   e.preventDefault()
   e.stopPropagation()
-  store.select(props.element.id)
+  if (additive) {
+    store.toggleSelection(props.element.id)
+    return
+  }
+  if (!store.selectedIds.includes(props.element.id)) {
+    store.select(props.element.id)
+  }
   drag.beginDrag({
     id: props.element.id,
     pointer: pointerPos(e),

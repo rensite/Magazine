@@ -29,7 +29,9 @@ interface State {
   spreadId: string | null
   title: string
   schema: SpreadSchema
-  selectedId: ElementId | null
+  // Order-preserving multi-selection. Last id = "primary" (used for
+  // single-selection-only flows like the rotation handle anchor).
+  selectedIds: ElementId[]
   zoom: number
   pan: { x: number; y: number }
   past: HistoryEntry[]
@@ -37,7 +39,7 @@ interface State {
   txInitial: SpreadSchema | null
   txLabel: string | null
   dirty: boolean
-  clipboard: SpreadElement | null
+  clipboard: SpreadElement[] | null
 }
 
 export const useSpreadStore = defineStore('spread', {
@@ -45,7 +47,7 @@ export const useSpreadStore = defineStore('spread', {
     spreadId: null,
     title: 'Untitled',
     schema: emptySchema(),
-    selectedId: null,
+    selectedIds: [],
     zoom: 1,
     pan: { x: 0, y: 0 },
     past: [],
@@ -57,8 +59,19 @@ export const useSpreadStore = defineStore('spread', {
   }),
   getters: {
     elements: (s): SpreadElement[] => s.schema.elements,
-    selected: (s): SpreadElement | null =>
-      s.schema.elements.find((e) => e.id === s.selectedId) ?? null,
+    selectedId: (s): ElementId | null =>
+      s.selectedIds.length > 0 ? s.selectedIds[s.selectedIds.length - 1] : null,
+    selected: (s): SpreadElement | null => {
+      if (s.selectedIds.length !== 1) return null
+      return s.schema.elements.find((e) => e.id === s.selectedIds[0]) ?? null
+    },
+    selectedAll: (s): SpreadElement[] => {
+      const idSet = new Set(s.selectedIds)
+      // Return in z-order so consumers (toolbars, bulk ops) work on
+      // visually-ordered items.
+      return s.schema.elements.filter((e) => idSet.has(e.id))
+    },
+    selectedCount: (s): number => s.selectedIds.length,
     canUndo: (s): boolean => s.past.length > 0,
     canRedo: (s): boolean => s.future.length > 0,
     inTransaction: (s): boolean => s.txInitial !== null,
@@ -68,7 +81,7 @@ export const useSpreadStore = defineStore('spread', {
       this.spreadId = spreadId
       this.title = title
       this.schema = migrateSchema(schema)
-      this.selectedId = null
+      this.selectedIds = []
       this.past = []
       this.future = []
       this.txInitial = null
@@ -77,7 +90,27 @@ export const useSpreadStore = defineStore('spread', {
     },
 
     select(id: ElementId | null) {
-      this.selectedId = id
+      this.selectedIds = id ? [id] : []
+    },
+
+    selectMany(ids: ElementId[]) {
+      // Dedupe while preserving order.
+      const seen = new Set<ElementId>()
+      this.selectedIds = ids.filter((id) => (seen.has(id) ? false : (seen.add(id), true)))
+    },
+
+    toggleSelection(id: ElementId) {
+      if (this.selectedIds.includes(id)) {
+        this.selectedIds = this.selectedIds.filter((x) => x !== id)
+      } else {
+        this.selectedIds = [...this.selectedIds, id]
+      }
+    },
+
+    selectAll() {
+      this.selectedIds = this.schema.elements
+        .filter((e) => !e.hidden && !e.locked)
+        .map((e) => e.id)
     },
 
     apply(label: string, recipe: (draft: SpreadSchema) => void) {
@@ -173,7 +206,7 @@ export const useSpreadStore = defineStore('spread', {
       this.apply(`add ${el.type}`, (draft) => {
         draft.elements.push(el)
       })
-      this.selectedId = el.id
+      this.selectedIds = [el.id]
     },
 
     updateElement(id: ElementId, patch: Partial<SpreadElement>) {
@@ -184,11 +217,32 @@ export const useSpreadStore = defineStore('spread', {
       })
     },
 
+    updateMany(ids: ElementId[], patch: Partial<SpreadElement>) {
+      if (ids.length === 0) return
+      const idSet = new Set(ids)
+      this.apply(`update x${ids.length}`, (draft) => {
+        for (let i = 0; i < draft.elements.length; i++) {
+          if (idSet.has(draft.elements[i].id)) {
+            draft.elements[i] = { ...draft.elements[i], ...patch } as SpreadElement
+          }
+        }
+      })
+    },
+
     removeElement(id: ElementId) {
       this.apply('remove', (draft) => {
         draft.elements = draft.elements.filter((e) => e.id !== id)
       })
-      if (this.selectedId === id) this.selectedId = null
+      this.selectedIds = this.selectedIds.filter((x) => x !== id)
+    },
+
+    removeMany(ids: ElementId[]) {
+      if (ids.length === 0) return
+      const idSet = new Set(ids)
+      this.apply(`remove x${ids.length}`, (draft) => {
+        draft.elements = draft.elements.filter((e) => !idSet.has(e.id))
+      })
+      this.selectedIds = this.selectedIds.filter((x) => !idSet.has(x))
     },
 
     toggleLock(id: ElementId) {
@@ -235,18 +289,28 @@ export const useSpreadStore = defineStore('spread', {
     },
 
     copySelected() {
-      if (!this.selected) return
-      this.clipboard = JSON.parse(JSON.stringify(this.selected))
+      const all = this.selectedAll
+      if (all.length === 0) return
+      this.clipboard = JSON.parse(JSON.stringify(all))
     },
 
     paste() {
-      if (!this.clipboard) return
-      this.addElement(cloneElement(this.clipboard))
+      if (!this.clipboard || this.clipboard.length === 0) return
+      const cloned = this.clipboard.map((el) => cloneElement(el))
+      this.apply(`paste x${cloned.length}`, (draft) => {
+        for (const el of cloned) draft.elements.push(el)
+      })
+      this.selectedIds = cloned.map((el) => el.id)
     },
 
     duplicateSelected() {
-      if (!this.selected) return
-      this.addElement(cloneElement(this.selected))
+      const all = this.selectedAll
+      if (all.length === 0) return
+      const cloned = all.map((el) => cloneElement(el))
+      this.apply(`duplicate x${cloned.length}`, (draft) => {
+        for (const el of cloned) draft.elements.push(el)
+      })
+      this.selectedIds = cloned.map((el) => el.id)
     },
 
     resetRotation(id: ElementId) {

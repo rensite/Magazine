@@ -48,11 +48,11 @@ const onDrop = (id: string) => {
         :key="el.id"
         class="flex items-center gap-1 rounded px-1 py-1 text-xs"
         :class="[
-          store.selectedId === el.id ? 'bg-ink-700 text-ink-100' : 'text-ink-300 hover:bg-ink-700/50',
+          store.selectedIds.includes(el.id) ? 'bg-ink-700 text-ink-100' : 'text-ink-300 hover:bg-ink-700/50',
           overId === el.id ? 'ring-1 ring-accent' : '',
         ]"
         draggable="true"
-        @click="store.select(el.id)"
+        @click="(e) => (e.shiftKey || e.metaKey || e.ctrlKey) ? store.toggleSelection(el.id) : store.select(el.id)"
         @dragstart="(e) => onDragStart(e, el.id)"
         @dragover="(e) => onDragOver(e, el.id)"
         @drop="onDrop(el.id)"

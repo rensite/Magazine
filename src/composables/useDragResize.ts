@@ -18,7 +18,7 @@ import { clearSmartGuides, setSmartGuides, type GuideLabel } from './useSmartGui
 const SNAP_PX = 6
 
 type Mode =
-  | { kind: 'drag'; startEl: SpreadElement; startPointer: Vec2 }
+  | { kind: 'drag'; startEl: SpreadElement; startPointer: Vec2; startGroup: SpreadElement[] }
   | { kind: 'resize'; startEl: SpreadElement; startPointer: Vec2; handle: HandleKey }
   | { kind: 'rotate'; startEl: SpreadElement; center: Vec2; startAngle: number }
 
@@ -135,26 +135,38 @@ export const useDragResize = () => {
     const id = activeId
     const snapThreshold = alt ? 0 : SNAP_PX / Math.max(0.001, store.zoom)
     if (mode.kind === 'drag') {
-      const d = canvasDelta(mode.startPointer, pointer)
-      const proposed = {
-        ...mode.startEl,
-        x: mode.startEl.x + d.x,
-        y: mode.startEl.y + d.y,
+      const m = mode
+      const d = canvasDelta(m.startPointer, pointer)
+      const proposed = { ...m.startEl, x: m.startEl.x + d.x, y: m.startEl.y + d.y }
+      // Build snap targets from the schema + sibling element edges.
+      // Exclude the dragged group's own boxes so it can't snap to itself.
+      const groupBoxes = m.startGroup.map((g) => `${g.x}|${g.y}|${g.width}|${g.height}`)
+      const groupSet = new Set(groupBoxes)
+      const sibs = siblingBoxes(store.schema, null).filter(
+        (b) => !groupSet.has(`${b.x}|${b.y}|${b.width}|${b.height}`),
+      )
+      const baseLines = buildSnapLines(store.schema)
+      const lines: SnapLines = {
+        x: [...baseLines.x, ...sibs.flatMap((b) => [b.x, b.x + b.width / 2, b.x + b.width])],
+        y: [...baseLines.y, ...sibs.flatMap((b) => [b.y, b.y + b.height / 2, b.y + b.height])],
       }
-      const lines = combinedLines(id)
       const snapped =
-        mode.startEl.rotate === 0 && snapThreshold > 0
+        m.startEl.rotate === 0 && snapThreshold > 0
           ? snapDrag(ensureBox(proposed), lines, snapThreshold)
           : { x: proposed.x, y: proposed.y }
-      const next = { ...proposed, x: snapped.x, y: snapped.y }
-      const movingBox = { x: next.x, y: next.y, width: next.width, height: next.height }
-      const m = snapThreshold > 0 ? detectMatches(movingBox, lines, 0.5) : { v: [], h: [] }
-      const sibs = snapThreshold > 0 ? siblingBoxes(store.schema, id) : []
-      const labels = sibs.length > 0 ? buildLabels(movingBox, m.v, m.h, sibs, 0.5) : []
-      setSmartGuides(Array.from(new Set(m.v)), Array.from(new Set(m.h)), labels)
+      const dx = snapped.x - m.startEl.x
+      const dy = snapped.y - m.startEl.y
+      const movingBox = { x: m.startEl.x + dx, y: m.startEl.y + dy, width: m.startEl.width, height: m.startEl.height }
+      const matches = snapThreshold > 0 ? detectMatches(movingBox, lines, 0.5) : { v: [], h: [] }
+      const labels = sibs.length > 0 ? buildLabels(movingBox, matches.v, matches.h, sibs, 0.5) : []
+      setSmartGuides(Array.from(new Set(matches.v)), Array.from(new Set(matches.h)), labels)
+      const group = m.startGroup
       store.updateInteraction((draft) => {
-        const i = draft.elements.findIndex((e) => e.id === id)
-        if (i !== -1) draft.elements[i] = next
+        for (const g of group) {
+          const i = draft.elements.findIndex((e) => e.id === g.id)
+          if (i === -1) continue
+          draft.elements[i] = { ...g, x: g.x + dx, y: g.y + dy } as SpreadElement
+        }
       })
     } else if (mode.kind === 'resize') {
       const d = canvasDelta(mode.startPointer, pointer)
@@ -253,7 +265,19 @@ export const useDragResize = () => {
     const el = store.elements.find((e) => e.id === ctx.id)
     if (!el) return
     activeId = ctx.id
-    mode = { kind: 'drag', startEl: JSON.parse(JSON.stringify(el)), startPointer: ctx.pointer }
+    // Snapshot every member of the current multi-selection so the move
+    // is computed from a frozen baseline (no drift on long drags).
+    const selectedSet = new Set(store.selectedIds)
+    if (!selectedSet.has(ctx.id)) selectedSet.add(ctx.id)
+    const startGroup = store.elements
+      .filter((e) => selectedSet.has(e.id) && !e.locked)
+      .map((e) => JSON.parse(JSON.stringify(e)) as SpreadElement)
+    mode = {
+      kind: 'drag',
+      startEl: JSON.parse(JSON.stringify(el)),
+      startPointer: ctx.pointer,
+      startGroup,
+    }
     store.beginInteraction('drag')
     lockSelection()
     installListeners()
