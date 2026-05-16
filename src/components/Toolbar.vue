@@ -4,6 +4,7 @@ import { useSpreadStore } from '@/stores/spreadStore'
 import { makeTextElement } from '@/utils/elementFactory'
 import { textDefaults } from '@/composables/useTextDefaults'
 import { useImageImport } from '@/composables/useImageImport'
+import VoiceMic from './VoiceMic.vue'
 
 const props = defineProps<{
   spreadId: string | null
@@ -97,6 +98,7 @@ const onFiles = async (e: Event) => {
     </template>
 
     <div class="ml-auto flex items-center gap-2">
+      <VoiceMic />
       <button
         class="rounded px-2 py-1 text-xs"
         :class="props.inspectorOpen ? 'bg-accent text-ink-900' : 'bg-ink-700 text-ink-200 hover:bg-ink-600'"
