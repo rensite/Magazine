@@ -13,6 +13,7 @@ const elements = computed(() => store.elements)
     <div
       v-for="el in elements"
       :key="el.id"
+      v-show="!el.hidden"
       class="pointer-events-none absolute inset-0"
     >
       <ImageElementNode v-if="el.type === 'image'" :element="el" />

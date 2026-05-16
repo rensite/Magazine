@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { spreadCanvasSize } from '@/utils/elementFactory'
 import SelectionHandles from './SelectionHandles.vue'
+import SmartGuides from './SmartGuides.vue'
 
 const store = useSpreadStore()
 const canvas = computed(() => spreadCanvasSize(store.schema))
@@ -17,6 +18,7 @@ const selected = computed(() => store.selected)
     :height="canvas.height"
     :viewBox="`0 0 ${canvas.width} ${canvas.height}`"
   >
-    <SelectionHandles v-if="selected" :element="selected" />
+    <SmartGuides />
+    <SelectionHandles v-if="selected && !selected.locked" :element="selected" />
   </svg>
 </template>
