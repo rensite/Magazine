@@ -11,9 +11,14 @@ import {
 import { getKey, getModelOverride } from '../keys'
 
 const BASE = 'https://api.x.ai/v1'
-const TEXT_MODEL = 'grok-2-latest'
-const VISION_MODEL = 'grok-2-vision-latest'
-const IMAGE_MODEL = 'grok-2-image'
+// xAI does NOT publish `-latest` aliases — every model ID needs the date
+// suffix or its canonical version. `grok-3` is the current multimodal
+// flagship (handles text AND vision in one model), and `grok-2-image-1212`
+// is the image-generation model. If these 404, call listGrokModels() from
+// devtools — it hits GET /v1/models and returns whatever your account has.
+const TEXT_MODEL = 'grok-3'
+const VISION_MODEL = 'grok-3'
+const IMAGE_MODEL = 'grok-2-image-1212'
 
 interface GrokContentPart {
   type: 'text' | 'image_url'
@@ -139,9 +144,15 @@ export const grokProvider: Provider = {
 
     if (!res.ok) {
       const text = await res.text().catch(() => '')
+      const isModelNotFound =
+        res.status === 400 &&
+        (text.includes('Model not found') || text.includes('model not found'))
+      const hint = isModelNotFound
+        ? ` (Hint: model "${model}" doesn't exist on your account. Run listGrokModels() from devtools, then set the override in Settings — xAI does not publish "-latest" aliases.)`
+        : ''
       throw new ProviderError(
         'grok',
-        `${res.status} ${res.statusText}: ${text.slice(0, 200)}`,
+        `${res.status} ${res.statusText}: ${text.slice(0, 200)}${hint}`,
         undefined,
         res.status >= 500 || res.status === 429,
       )
@@ -205,4 +216,34 @@ export const grokProvider: Provider = {
       revisedPrompt: first.revised_prompt,
     } as GeneratedImage
   },
+}
+
+/**
+ * Debug helper: lists every Grok model the current API key has access to.
+ * xAI exposes an OpenAI-compatible /v1/models endpoint. Call from the
+ * browser console:
+ *
+ *   (await import('@/ai')).listGrokModels().then(console.table)
+ *
+ * Returns trimmed { id, ownedBy, created } rows — useful when the
+ * configured model id 404s.
+ */
+export const listAvailableModels = async (): Promise<
+  Array<{ id: string; ownedBy?: string; created?: number }>
+> => {
+  const apiKey = getKey('grok')
+  const res = await fetch(`${BASE}/models`, {
+    headers: { authorization: `Bearer ${apiKey}` },
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`listGrokModels failed: ${res.status} ${text.slice(0, 200)}`)
+  }
+  const json = (await res.json()) as {
+    data?: Array<{ id?: string; owned_by?: string; created?: number }>
+  }
+  return (json.data ?? [])
+    .map((m) => ({ id: m.id ?? '', ownedBy: m.owned_by, created: m.created }))
+    .filter((m) => m.id.length > 0)
+    .sort((a, b) => a.id.localeCompare(b.id))
 }

@@ -53,8 +53,8 @@ const providers: ProviderRow[] = [
     placeholder: 'xai-…',
     href: 'https://console.x.ai',
     note: 'Fallback for text + primary for image generation.',
-    defaultModel: 'grok-2-latest',
-    modelHint: 'e.g. grok-2-latest, grok-2-vision-latest',
+    defaultModel: 'grok-3',
+    modelHint: 'e.g. grok-3 (default, multimodal), grok-3-mini (cheaper). xAI does not use "-latest" aliases — date-tagged IDs only.',
   },
 ]
 

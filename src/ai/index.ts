@@ -277,6 +277,8 @@ export type {
   ProviderId,
 } from './types'
 export { ProviderError, StructuredOutputError, MissingKeyError } from './types'
-// Debug-only: list every Gemini model your API key has access to.
-// Call from the browser console: `(await import('@/ai')).listGeminiModels()`
+// Debug-only model discovery helpers — call from devtools when a model 404s.
+//   (await import('@/ai')).listGeminiModels().then(console.table)
+//   (await import('@/ai')).listGrokModels().then(console.table)
 export { listAvailableModels as listGeminiModels } from './providers/gemini'
+export { listAvailableModels as listGrokModels } from './providers/grok'
