@@ -37,13 +37,29 @@ const pageBg = computed(() => {
 })
 
 const colorFor = (el: SpreadElement): string => {
-  if (el.type === 'text') return el.color ?? '#1a1410'
-  if (el.type === 'image') return '#3a3f49'
-  return '#999'
+  switch (el.type) {
+    case 'text':
+    case 'pullquote':
+    case 'caption':
+      return el.color ?? '#1a1410'
+    case 'sticker':
+      return el.backgroundColor ?? '#1a1410'
+    case 'shape':
+      return el.fill ?? el.stroke ?? '#1a1410'
+    case 'image':
+      return '#3a3f49'
+    case 'group':
+      return 'transparent'
+    default:
+      return '#999'
+  }
 }
 
 const opacityFor = (el: SpreadElement): number => {
-  if (el.type === 'text') return Math.max(0.3, el.opacity ?? 1) * 0.8
+  if (el.type === 'group') return 0
+  if (el.type === 'text' || el.type === 'pullquote' || el.type === 'caption') {
+    return Math.max(0.3, el.opacity ?? 1) * 0.8
+  }
   return el.opacity ?? 1
 }
 </script>

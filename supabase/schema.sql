@@ -241,3 +241,63 @@ create policy "spread-assets owner delete" on storage.objects
     bucket_id = 'spread-assets'
     and auth.uid()::text = (storage.foldername(name))[1]
   );
+
+-- =============================================================
+-- Editorial generator: generation_sessions (PR 3)
+-- =============================================================
+-- A session captures one editorial-generation run: uploaded raw text +
+-- images, the LLM-derived Brief / StoryAngles / EditorOutput variants,
+-- and the final chosen SpreadSchema. The big payloads are jsonb so the
+-- generator can evolve its prompts without DB migrations; row-level types
+-- live in src/types/generation.ts and are zod-validated at the LLM boundary.
+
+create table if not exists public.generation_sessions (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  status text not null default 'idle',
+  title text not null default 'Untitled session',
+  raw_materials jsonb not null default '[]'::jsonb,
+  brief jsonb,
+  angles jsonb,
+  selected_angle_ids jsonb not null default '[]'::jsonb,
+  variants jsonb not null default '{}'::jsonb,
+  selected_variant_id text,
+  result_schema jsonb,
+  result_spread_id uuid references public.spreads(id) on delete set null,
+  error_message text,
+  cost jsonb not null default jsonb_build_object(
+    'totalInputTokens', 0,
+    'totalOutputTokens', 0,
+    'totalUsd', 0,
+    'calls', 0
+  ),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists generation_sessions_owner_idx
+  on public.generation_sessions (owner_id, updated_at desc);
+
+drop trigger if exists trg_touch_generation_sessions on public.generation_sessions;
+create trigger trg_touch_generation_sessions
+before update on public.generation_sessions
+for each row execute function public.touch_spread_updated_at();
+
+alter table public.generation_sessions enable row level security;
+
+drop policy if exists generation_sessions_owner_select on public.generation_sessions;
+create policy generation_sessions_owner_select on public.generation_sessions
+  for select using (owner_id = auth.uid());
+
+drop policy if exists generation_sessions_owner_insert on public.generation_sessions;
+create policy generation_sessions_owner_insert on public.generation_sessions
+  for insert with check (owner_id = auth.uid());
+
+drop policy if exists generation_sessions_owner_update on public.generation_sessions;
+create policy generation_sessions_owner_update on public.generation_sessions
+  for update using (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+
+drop policy if exists generation_sessions_owner_delete on public.generation_sessions;
+create policy generation_sessions_owner_delete on public.generation_sessions
+  for delete using (owner_id = auth.uid());

@@ -1,0 +1,258 @@
+// Pinia store for the editorial generator. Holds the live session, exposes
+// granular mutations (the pipeline layers in PR 4+ call these), and
+// auto-persists patches to Supabase with a short debounce so the UI stays
+// responsive while typing or reordering materials.
+
+import { defineStore } from 'pinia'
+import type {
+  GenerationSession,
+  GenerationSessionPatch,
+  GenerationStatus,
+  RawMaterial,
+} from '@/types/generation'
+import { emptyCost } from '@/types/generation'
+import {
+  currentGenerationService,
+  type GenerationListItem,
+} from '@/services/generationService'
+import type { SpreadSchema } from '@/types/element'
+
+interface State {
+  session: GenerationSession | null
+  list: GenerationListItem[]
+  loading: boolean
+  saving: boolean
+  /** UI-only: surface a save error without overwriting the live session. */
+  saveError: string | null
+}
+
+const DEBOUNCE_MS = 400
+
+/** Coalesce overlapping patches in flight. Last write wins per field. */
+let pending: GenerationSessionPatch = {}
+let timer: ReturnType<typeof setTimeout> | null = null
+let inflight: Promise<void> | null = null
+
+export const useGeneratorStore = defineStore('generator', {
+  state: (): State => ({
+    session: null,
+    list: [],
+    loading: false,
+    saving: false,
+    saveError: null,
+  }),
+
+  getters: {
+    status: (s): GenerationStatus => s.session?.status ?? 'idle',
+    hasSession: (s): boolean => s.session !== null,
+    sessionId: (s): string | null => s.session?.id ?? null,
+    materials: (s): RawMaterial[] => s.session?.rawMaterials ?? [],
+    cost: (s) => s.session?.cost ?? emptyCost(),
+  },
+
+  actions: {
+    async refreshList() {
+      this.loading = true
+      try {
+        this.list = await currentGenerationService().list()
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async createSession(title: string, rawMaterials: RawMaterial[] = []) {
+      this.loading = true
+      try {
+        this.session = await currentGenerationService().create({ title, rawMaterials })
+        this.saveError = null
+        // Also refresh the list so the new session appears in any picker.
+        this.list = [
+          {
+            id: this.session.id,
+            title: this.session.title,
+            status: this.session.status,
+            updatedAt: this.session.updatedAt,
+            resultSpreadId: this.session.resultSpreadId,
+          },
+          ...this.list,
+        ]
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async openSession(id: string) {
+      this.loading = true
+      try {
+        this.session = await currentGenerationService().load(id)
+        this.saveError = null
+      } finally {
+        this.loading = false
+      }
+    },
+
+    closeSession() {
+      // Flush any pending writes before clearing local state, otherwise
+      // the user loses in-progress edits on tab close.
+      this.flushPending()
+      this.session = null
+      pending = {}
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+    },
+
+    /**
+     * Patch the live session and schedule a debounced persist. Optimistic:
+     * UI sees the change immediately; persistence catches up.
+     */
+    patch(p: GenerationSessionPatch) {
+      if (!this.session) return
+      // Apply in-memory immediately.
+      this.session = { ...this.session, ...p, updatedAt: new Date().toISOString() }
+      // Merge into the pending bag (last write wins per field).
+      pending = { ...pending, ...p }
+      this.scheduleFlush()
+    },
+
+    scheduleFlush() {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        void this.flushPending()
+      }, DEBOUNCE_MS)
+    },
+
+    /**
+     * Force-flush the pending patch buffer. Awaitable. Safe to call when no
+     * writes are pending — resolves immediately.
+     */
+    async flushPending(): Promise<void> {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      if (!this.session) return
+      if (Object.keys(pending).length === 0) {
+        // Wait for any in-flight write so callers can rely on flushPending()
+        // meaning "no more outstanding network writes after this".
+        if (inflight) await inflight
+        return
+      }
+      const id = this.session.id
+      const payload = pending
+      pending = {}
+      this.saving = true
+      this.saveError = null
+      const promise = (async () => {
+        try {
+          const updated = await currentGenerationService().update(id, payload)
+          // Only overwrite local fields the server returned, preserving any
+          // user edits that happened during the await.
+          if (this.session && this.session.id === id) {
+            this.session = {
+              ...this.session,
+              updatedAt: updated.updatedAt,
+              // server may have validated/normalized some fields:
+              status: updated.status,
+            }
+          }
+        } catch (err) {
+          this.saveError = err instanceof Error ? err.message : String(err)
+          // Re-enqueue the patch so the next user action / explicit retry
+          // tries again. This keeps writes from silently disappearing.
+          pending = { ...payload, ...pending }
+        } finally {
+          this.saving = false
+          inflight = null
+        }
+      })()
+      inflight = promise
+      await promise
+    },
+
+    // ===== Pipeline mutations =====
+    // These are the entry points the generator layers (PR 4+) call.
+
+    setStatus(status: GenerationStatus) {
+      this.patch({ status })
+    },
+
+    setError(message: string | null) {
+      this.patch({
+        errorMessage: message,
+        status: message ? 'error' : this.session?.status ?? 'idle',
+      })
+    },
+
+    addMaterial(m: RawMaterial) {
+      if (!this.session) return
+      this.patch({ rawMaterials: [...this.session.rawMaterials, m] })
+    },
+
+    removeMaterial(id: string) {
+      if (!this.session) return
+      this.patch({
+        rawMaterials: this.session.rawMaterials.filter((m) => m.id !== id),
+      })
+    },
+
+    setBrief(brief: unknown) {
+      this.patch({ brief, status: 'brief-ready' })
+    },
+
+    setAngles(angles: unknown, selectedIds: string[]) {
+      this.patch({
+        angles,
+        selectedAngleIds: selectedIds,
+        status: 'angles-ready',
+      })
+    },
+
+    setVariant(angleId: string, variant: unknown) {
+      if (!this.session) return
+      this.patch({
+        variants: { ...this.session.variants, [angleId]: variant },
+      })
+    },
+
+    selectVariant(angleId: string) {
+      this.patch({ selectedVariantId: angleId })
+    },
+
+    setResult(schema: SpreadSchema, spreadId: string) {
+      this.patch({
+        resultSchema: schema,
+        resultSpreadId: spreadId,
+        status: 'opened-in-editor',
+      })
+    },
+
+    /**
+     * Add to the cumulative cost counter. Each LLM call from the generator
+     * reports its usage here for the cost-counter UI in PR 8.
+     */
+    addCost(input: { inputTokens?: number; outputTokens?: number; usd?: number }) {
+      if (!this.session) return
+      const c = this.session.cost
+      this.patch({
+        cost: {
+          totalInputTokens: c.totalInputTokens + (input.inputTokens ?? 0),
+          totalOutputTokens: c.totalOutputTokens + (input.outputTokens ?? 0),
+          totalUsd: c.totalUsd + (input.usd ?? 0),
+          calls: c.calls + 1,
+        },
+      })
+    },
+  },
+})
+
+/** Test helper: reset module-level debouncer state between tests. */
+export const __resetGeneratorPendingForTests = (): void => {
+  pending = {}
+  if (timer) {
+    clearTimeout(timer)
+    timer = null
+  }
+  inflight = null
+}

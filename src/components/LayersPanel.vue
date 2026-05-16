@@ -1,14 +1,31 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useSpreadStore } from '@/stores/spreadStore'
-import { isText } from '@/types/element'
+import { isTextBearing, type SpreadElement } from '@/types/element'
 
 const store = useSpreadStore()
 const elements = computed(() => [...store.elements].reverse())
 
-const label = (id: string, type: 'text' | 'image', content?: string) => {
-  if (type === 'text') return content?.trim().slice(0, 24) || 'Text'
-  return `Image · ${id.slice(0, 4)}`
+const label = (el: SpreadElement): string => {
+  if (isTextBearing(el)) {
+    return el.content?.trim().slice(0, 24) || labelForKind(el.type)
+  }
+  if (el.type === 'image') return `Image · ${el.id.slice(0, 4)}`
+  if (el.type === 'shape') return `${el.shape} · ${el.id.slice(0, 4)}`
+  if (el.type === 'group') return el.label || `Group · ${el.id.slice(0, 4)}`
+  // exhaustive
+  const _exhaustive: never = el
+  return _exhaustive
+}
+
+const labelForKind = (kind: SpreadElement['type']): string => {
+  switch (kind) {
+    case 'text': return 'Text'
+    case 'pullquote': return 'Pullquote'
+    case 'caption': return 'Caption'
+    case 'sticker': return 'Sticker'
+    default: return kind
+  }
 }
 
 const dragId = ref<string | null>(null)
@@ -70,7 +87,7 @@ const onDrop = (id: string) => {
           @click.stop="store.toggleLock(el.id)"
         >{{ el.locked ? '🔒' : '🔓' }}</button>
         <span class="flex-1 truncate">
-          {{ label(el.id, el.type, isText(el) ? el.content : undefined) }}
+          {{ label(el) }}
         </span>
         <span class="text-[10px] uppercase text-ink-500">{{ el.type }}</span>
       </li>

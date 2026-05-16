@@ -11,6 +11,8 @@ import AuthGate from '@/components/AuthGate.vue'
 import SpreadsMenu from '@/components/SpreadsMenu.vue'
 import PrintView from '@/components/PrintView.vue'
 import EditableTitle from '@/components/EditableTitle.vue'
+import GeneratorView from '@/components/Generator/GeneratorView.vue'
+import ApiKeysSettings from '@/components/Generator/ApiKeysSettings.vue'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { useAuthStore } from '@/stores/authStore'
 import { supabaseSpreadService } from '@/services/spreadService'
@@ -23,6 +25,40 @@ import { emptySchema } from '@/utils/elementFactory'
 import type { ChapterRecord, SpreadRecord, SpreadSchema } from '@/types/element'
 
 const isPrintMode = new URLSearchParams(window.location.search).has('print')
+
+// Top-level screen branching (no router yet). Generator runs as a
+// full-screen alternate view — option 1A from the PR design doc.
+const isGenerating = ref(false)
+const isApiKeysOpen = ref(false)
+const openApiKeys = () => {
+  isApiKeysOpen.value = true
+}
+const closeApiKeys = () => {
+  isApiKeysOpen.value = false
+}
+
+const openGenerator = () => {
+  isGenerating.value = true
+}
+
+const closeGenerator = () => {
+  isGenerating.value = false
+}
+
+const handleVariantOpened = async (payload: { angleId: string; schema: unknown }) => {
+  // Create a new spread row for the generated variant and load it.
+  try {
+    const record = await supabaseSpreadService.create(
+      `Generated · ${payload.angleId}`,
+      payload.schema as SpreadSchema,
+    )
+    await refreshList()
+    await openSpread(record.id)
+    isGenerating.value = false
+  } catch (err) {
+    initError.value = (err as Error).message
+  }
+}
 
 const store = useSpreadStore()
 const auth = useAuthStore()
@@ -243,6 +279,28 @@ const onKey = (e: KeyboardEvent) => {
   if (e.key === 'i' || e.key === 'I') { toggleInspector(); e.preventDefault() }
 }
 onMounted(() => window.addEventListener('keydown', onKey))
+
+// Open generator from the Cmd+K command palette ("New from materials…").
+const onOpenGenerator = () => {
+  isGenerating.value = true
+}
+onMounted(() => window.addEventListener('stan:open-generator', onOpenGenerator))
+
+// Cmd+G shortcut.
+const onGeneratorHotkey = (e: KeyboardEvent) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'g') {
+    e.preventDefault()
+    isGenerating.value = true
+  }
+}
+onMounted(() => window.addEventListener('keydown', onGeneratorHotkey))
+
+// Generator surface (or any other component) can open the API-keys modal
+// via this event — keeps it decoupled from App.vue imports.
+const onOpenApiKeys = () => {
+  isApiKeysOpen.value = true
+}
+onMounted(() => window.addEventListener('stan:open-api-keys', onOpenApiKeys))
 </script>
 
 <template>
@@ -268,6 +326,12 @@ VITE_SUPABASE_ASSETS_BUCKET=spread-assets</pre>
     </template>
     <template v-else-if="!auth.isAuthenticated">
       <AuthGate />
+    </template>
+    <template v-else-if="isGenerating">
+      <GeneratorView
+        @close="closeGenerator"
+        @open-variant="handleVariantOpened"
+      />
     </template>
     <template v-else>
       <header class="flex items-center justify-between border-b border-ink-700 px-4 py-2">
@@ -304,6 +368,16 @@ VITE_SUPABASE_ASSETS_BUCKET=spread-assets</pre>
           <span v-else-if="persistence.state.status === 'error'" class="text-red-400">ошибка</span>
           <span v-else-if="store.dirty">не сохранено</span>
           <span v-else-if="persistence.state.lastSyncedAt">синк {{ new Date(persistence.state.lastSyncedAt).toLocaleTimeString() }}</span>
+          <button
+            class="rounded bg-ink-700 px-2 py-1 text-ink-100 hover:bg-ink-600"
+            @click="openApiKeys"
+            title="API-ключи"
+          >🔑</button>
+          <button
+            class="rounded bg-gold px-2 py-1 text-ink-900 hover:opacity-90"
+            @click="openGenerator"
+            title="Cmd+G — собрать разворот из материалов"
+          >+ Из материалов</button>
           <button
             class="rounded bg-ink-700 px-2 py-1 text-ink-100 hover:bg-ink-600"
             @click="persistence.forceSave('manual')"
@@ -352,5 +426,7 @@ VITE_SUPABASE_ASSETS_BUCKET=spread-assets</pre>
       <ContextMenu />
       <SelectionToolbar v-if="current" />
     </template>
+    <!-- API-key modal: shown over either the editor or the generator. -->
+    <ApiKeysSettings :open="isApiKeysOpen" @close="closeApiKeys" />
   </div>
 </template>

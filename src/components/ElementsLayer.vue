@@ -3,6 +3,10 @@ import { computed } from 'vue'
 import { useSpreadStore } from '@/stores/spreadStore'
 import TextElementNode from './elements/TextElementNode.vue'
 import ImageElementNode from './elements/ImageElementNode.vue'
+import PullquoteElementNode from './elements/PullquoteElementNode.vue'
+import CaptionElementNode from './elements/CaptionElementNode.vue'
+import StickerElementNode from './elements/StickerElementNode.vue'
+import ShapeElementNode from './elements/ShapeElementNode.vue'
 
 const store = useSpreadStore()
 const elements = computed(() => store.elements)
@@ -18,6 +22,11 @@ const elements = computed(() => store.elements)
     >
       <ImageElementNode v-if="el.type === 'image'" :element="el" />
       <TextElementNode v-else-if="el.type === 'text'" :element="el" />
+      <PullquoteElementNode v-else-if="el.type === 'pullquote'" :element="el" />
+      <CaptionElementNode v-else-if="el.type === 'caption'" :element="el" />
+      <StickerElementNode v-else-if="el.type === 'sticker'" :element="el" />
+      <ShapeElementNode v-else-if="el.type === 'shape'" :element="el" />
+      <!-- group elements are layout-only metadata; they render no visual -->
     </div>
   </div>
 </template>

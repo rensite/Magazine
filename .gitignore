@@ -9,6 +9,15 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 *.tsbuildinfo
+# vue-tsc -b emits .js next to source files; we ignore them because
+# Vite is the real bundler. If they reappear, run:
+#   find src tests -name '*.js' -delete && find src -name '*.vue.js' -delete
+src/**/*.js
+src/**/*.vue.js
+tests/**/*.js
+!**/*.config.js
+!postcss.config.js
+!tailwind.config.js
 coverage
 playwright-report
 test-results

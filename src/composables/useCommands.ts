@@ -33,6 +33,18 @@ export const useCommands = () => {
   const singleImage = () => store.selectedCount === 1 && store.selected !== null && isImage(store.selected)
 
   const list: Command[] = [
+    // Generator entry point. Dispatched as a window event so the command
+    // registry doesn't have to import App.vue's top-level branching state.
+    {
+      id: 'generator.open',
+      label: 'New from materials…',
+      group: 'view',
+      hotkey: '⌘G',
+      keywords: 'generate editorial spread materials brief angles ai',
+      run: () => {
+        window.dispatchEvent(new CustomEvent('stan:open-generator'))
+      },
+    },
     // Insert
     {
       id: 'insert.text',
