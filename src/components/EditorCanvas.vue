@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, provide, ref } from 'vue'
 import { useSpreadStore } from '@/stores/spreadStore'
+import { inject } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useViewport } from '@/composables/useViewport'
 import { EDITOR_CONTAINER_KEY } from '@/composables/useCanvasPointer'
@@ -80,10 +81,29 @@ const gridStyle = computed(() => {
   }
 })
 
+const urlMap = inject<Record<string, string>>('imageUrls', {})
+const resolveUrl = (path: string | undefined): string => {
+  if (!path) return ''
+  if (/^(data:|blob:|https?:\/\/|\/)/.test(path)) return path
+  return urlMap[path] ?? ''
+}
+
 const bgStyle = computed(() => {
   const bg = store.schema.background
   if (bg.type === 'plain') {
     return { backgroundColor: bg.color ?? '#f5efe2' }
+  }
+  if (bg.type === 'image' && bg.imageSrc) {
+    const url = resolveUrl(bg.imageSrc)
+    if (url) {
+      return {
+        backgroundColor: bg.color ?? '#000',
+        backgroundImage: `url("${url}")`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }
+    }
   }
   return {}
 })

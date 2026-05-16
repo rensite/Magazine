@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { useSpreadStore } from '@/stores/spreadStore'
+import { useAuthStore } from '@/stores/authStore'
 import { fromPx, toPx, UNIT_SUFFIX } from '@/utils/units'
 import { PAGE_PRESETS, matchPreset, presetById, presetToPx } from '@/utils/pagePresets'
+import { prepareLocalImage, uploadImage } from '@/services/imageUpload'
 import type { Margins, Orientation, PageSide, Unit } from '@/types/element'
+import ColorPicker from './ColorPicker.vue'
 
 const store = useSpreadStore()
 
@@ -70,6 +73,60 @@ const gutterIn = computed({
 })
 
 const bg = computed(() => store.schema.background)
+const auth = useAuthStore()
+const bgFileInput = ref<HTMLInputElement | null>(null)
+const bgUploading = ref(false)
+const bgUploadError = ref<string | null>(null)
+
+// Paper-friendly background presets — a curated palette that prints
+// well (no oversaturated tones). The "current" swatch wins focus when
+// it matches one of these, otherwise hex stays free-form.
+const BG_PRESETS: string[] = [
+  '#f5efe2', '#faf6ee', '#ffffff', '#f1eee9', '#ece5d3',
+  '#1a1410', '#0f1115', '#23272f', '#2e1a16', '#0c2030',
+  '#fae3c8', '#fbd1ba', '#f6c6c4', '#d8e6cf', '#cfe2e8',
+]
+
+const urlMap = inject<Record<string, string>>('imageUrls', {})
+const resolveUrl = (path: string | undefined): string => {
+  if (!path) return ''
+  if (/^(data:|blob:|https?:\/\/|\/)/.test(path)) return path
+  return urlMap[path] ?? ''
+}
+const bgImagePreview = computed(() => resolveUrl(bg.value.imageSrc))
+
+const onPickBgImage = () => bgFileInput.value?.click()
+
+const onBgFile = async (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+  bgUploading.value = true
+  bgUploadError.value = null
+  try {
+    let result
+    if (auth.user?.id && store.spreadId) {
+      try {
+        result = await uploadImage(file, auth.user.id, store.spreadId)
+      } catch (err) {
+        console.warn('Background upload to storage failed, falling back to local data URL', err)
+        result = await prepareLocalImage(file)
+      }
+    } else {
+      result = await prepareLocalImage(file)
+    }
+    store.setBackground({ type: 'image', imageSrc: result.src })
+  } catch (err) {
+    bgUploadError.value = (err as Error).message
+  } finally {
+    bgUploading.value = false
+    target.value = ''
+  }
+}
+
+const clearBgImage = () => {
+  store.setBackground({ type: 'plain', imageSrc: undefined })
+}
 
 watch(
   () => store.schema.mirrorPages,
@@ -213,18 +270,67 @@ watch(
       <span class="text-xs text-ink-300">Background</span>
       <div class="flex gap-1">
         <button v-for="t in (['paper', 'plain', 'image'] as const)" :key="t"
-          class="flex-1 rounded px-2 py-1 text-xs"
+          class="flex-1 rounded px-2 py-1 text-xs capitalize"
           :class="bg.type === t ? 'bg-accent text-white' : 'bg-ink-700 hover:bg-ink-600'"
           @click="store.setBackground({ type: t })"
         >{{ t }}</button>
       </div>
-      <input
-        v-if="bg.type === 'plain'"
-        type="color"
-        class="h-9 w-full cursor-pointer rounded border border-ink-600 bg-transparent"
-        :value="bg.color ?? '#f5efe2'"
-        @input="store.setBackground({ color: ($event.target as HTMLInputElement).value })"
-      />
+
+      <!-- Plain colour: preset swatches + full picker (hex + recent). -->
+      <template v-if="bg.type === 'plain'">
+        <div class="mt-1 grid grid-cols-5 gap-1">
+          <button
+            v-for="c in BG_PRESETS"
+            :key="c"
+            type="button"
+            class="h-6 w-full rounded border"
+            :class="(bg.color ?? '#f5efe2').toLowerCase() === c.toLowerCase() ? 'border-accent ring-1 ring-accent' : 'border-ink-600 hover:border-ink-400'"
+            :style="{ background: c }"
+            :title="c"
+            @click="store.setBackground({ color: c })"
+          />
+        </div>
+        <div class="mt-1 flex items-center gap-2">
+          <ColorPicker :model-value="bg.color ?? '#f5efe2'" @update:model-value="(v) => store.setBackground({ color: v })" />
+          <span class="font-mono text-[11px] text-ink-400">{{ (bg.color ?? '#f5efe2').toLowerCase() }}</span>
+        </div>
+      </template>
+
+      <!-- Image background: upload, preview, remove, optional tint. -->
+      <template v-if="bg.type === 'image'">
+        <div class="mt-1 flex flex-col gap-2">
+          <div
+            v-if="bgImagePreview"
+            class="relative h-24 w-full overflow-hidden rounded border border-ink-600"
+            :style="{ backgroundImage: `url('${bgImagePreview}')`, backgroundSize: 'cover', backgroundPosition: 'center' }"
+          />
+          <div v-else class="flex h-24 w-full items-center justify-center rounded border border-dashed border-ink-600 text-[11px] text-ink-400">
+            пока без изображения
+          </div>
+          <div class="flex gap-1">
+            <button
+              type="button"
+              class="flex-1 rounded bg-ink-700 px-2 py-1 text-xs text-ink-100 hover:bg-ink-600 disabled:opacity-50"
+              :disabled="bgUploading"
+              @click="onPickBgImage"
+            >{{ bgUploading ? '…' : bgImagePreview ? 'Заменить' : 'Загрузить' }}</button>
+            <button
+              v-if="bgImagePreview"
+              type="button"
+              class="rounded bg-ink-700 px-2 py-1 text-xs text-ink-200 hover:bg-ink-600"
+              @click="clearBgImage"
+            >Убрать</button>
+          </div>
+          <input
+            ref="bgFileInput"
+            type="file"
+            accept="image/*"
+            class="hidden"
+            @change="onBgFile"
+          />
+          <p v-if="bgUploadError" class="text-[11px] text-red-400">{{ bgUploadError }}</p>
+        </div>
+      </template>
     </section>
 
     <section class="flex flex-col gap-2">

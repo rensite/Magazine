@@ -17,12 +17,23 @@ const ACCENT = '#0d99ff'
 const HANDLE_FILL = '#ffffff'
 
 const transform = computed(() => toSvgTransform(ensureBox(props.element)))
-// Scale-invariant sizes: handles 7px on screen, lines 1px on screen.
-const handleSize = computed(() => 7 / store.zoom)
+// Scale-invariant sizes: tuned for a softer Figma-like feel.
+const handleSize = computed(() => 6 / store.zoom)
+const handleRadius = computed(() => 1.5 / store.zoom)
 const stroke = computed(() => 1 / store.zoom)
+const labelFont = computed(() => 10 / store.zoom)
+const labelPad = computed(() => 3 / store.zoom)
 
 const hoveringHandle = ref(false)
 const interacting = ref(false)
+
+const dimsLabel = computed(() => {
+  const w = Math.round(props.element.width)
+  const h = Math.round(props.element.height)
+  const r = props.element.rotate
+  if (r !== 0) return `${w} × ${h} · ${Math.round(r)}°`
+  return `${w} × ${h}`
+})
 
 interface ResizeHandle { x: number; y: number; key: HandleKey; cursor: string }
 
@@ -97,7 +108,8 @@ const rotateCursor =
 
 <template>
   <g :transform="transform" class="pointer-events-auto">
-    <!-- Selection frame: always visible, thin solid accent line. -->
+    <!-- Selection frame: always visible, thin solid accent line with
+         a soft glow so it reads against any background. -->
     <rect
       :width="props.element.width"
       :height="props.element.height"
@@ -105,7 +117,29 @@ const rotateCursor =
       :stroke="ACCENT"
       :stroke-width="stroke"
       vector-effect="non-scaling-stroke"
+      style="filter: drop-shadow(0 0 1.5px rgba(13,153,255,0.55))"
     />
+
+    <!-- Dimension badge: only during active interaction (drag/resize/
+         rotate). Sits just below the bbox so it doesn't crowd content. -->
+    <g v-if="interacting" :transform="`translate(${props.element.width / 2}, ${props.element.height + 14 / store.zoom})`">
+      <rect
+        :x="-(dimsLabel.length * labelFont * 0.32 + labelPad)"
+        :y="-labelFont * 0.6 - labelPad / 2"
+        :width="dimsLabel.length * labelFont * 0.64 + labelPad * 2"
+        :height="labelFont + labelPad"
+        :rx="2 / store.zoom"
+        :fill="ACCENT"
+      />
+      <text
+        :font-size="labelFont"
+        :fill="'#ffffff'"
+        font-family="ui-sans-serif, system-ui, sans-serif"
+        text-anchor="middle"
+        dy="0.32em"
+        style="user-select: none"
+      >{{ dimsLabel }}</text>
+    </g>
 
     <!-- Resize handles. Larger transparent hit area + small visible square. -->
     <g v-for="hd in resizeHandles" :key="hd.key">
@@ -119,8 +153,9 @@ const rotateCursor =
         :stroke="ACCENT"
         :stroke-width="stroke"
         vector-effect="non-scaling-stroke"
-        :rx="0.5 / store.zoom"
+        :rx="handleRadius"
         pointer-events="none"
+        style="filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.25))"
       />
       <!-- enlarged hit area (~14px) -->
       <rect
@@ -160,6 +195,7 @@ const rotateCursor =
         :stroke-width="stroke"
         vector-effect="non-scaling-stroke"
         pointer-events="none"
+        style="filter: drop-shadow(0 1px 1.5px rgba(0,0,0,0.25))"
       />
       <circle
         class="handle"
