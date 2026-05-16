@@ -22,6 +22,7 @@ import {
   StructuredOutputError,
 } from './types'
 import { chainForTask, providerById } from './router'
+import { normalizeImageInputs } from './imageInput'
 
 const buildMessages = (
   prompt: string,
@@ -176,6 +177,14 @@ export async function aiCall<T = string>(
   opts: AiCallOptions<T>,
 ): Promise<AiCallReturn<T>> {
   const baseMessages = buildMessages(prompt, opts)
+  // Normalize image URLs that providers can't fetch directly (blob:, data:).
+  // Done once here so every provider in the fallback chain sees the same
+  // resolved bytes instead of re-fetching the blob URL three times.
+  for (const m of baseMessages) {
+    if (m.images && m.images.length) {
+      m.images = await normalizeImageInputs(m.images)
+    }
+  }
   const messages =
     opts.schema && baseMessages.length
       ? baseMessages.map((m, i) =>
