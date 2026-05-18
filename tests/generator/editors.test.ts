@@ -86,8 +86,14 @@ describe('archetype registry', () => {
     )
   })
 
-  it('throws on unimplemented archetypes (e.g. apartamento)', () => {
-    expect(() => getArchetype('apartamento')).toThrow(/not implemented/)
+  it('routes unimplemented archetypes to a fallback (e.g. apartamento → japanese-lifestyle)', () => {
+    // Schema accepts five archetype ids but only three are implemented;
+    // a hard throw silently drops the variant card in the UI, so we
+    // route to the closest implemented persona instead.
+    const a = getArchetype('apartamento')
+    expect(a.id).toBe('japanese-lifestyle')
+    const b = getArchetype('hiphop-underground')
+    expect(b.id).toBe('nyt-longread')
   })
 })
 

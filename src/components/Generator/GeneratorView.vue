@@ -175,9 +175,11 @@ const generateVariants = async () => {
 
 // ---------- Step 4: variants ----------
 interface VariantDetail {
-  output: { gaps: Gap[]; editorialNotes: string; selection: { droppedTextSections: Array<{ id: string; reason: string }>; droppedMedia: Array<{ id: string; reason: string }> } }
-  schema: unknown
-  issues: Array<{ message: string; severity: string }>
+  output?: { gaps: Gap[]; editorialNotes: string; selection: { droppedTextSections: Array<{ id: string; reason: string }>; droppedMedia: Array<{ id: string; reason: string }> } }
+  schema?: unknown
+  issues?: Array<{ message: string; severity: string }>
+  /** Set by the pipeline when this angle's editor failed. */
+  error?: string
 }
 const variants = computed(() => {
   const v = (store.session?.variants ?? {}) as Record<string, VariantDetail>
@@ -187,6 +189,18 @@ const variants = computed(() => {
     ...detail,
   }))
 })
+
+const retryAngle = async (angleId: string) => {
+  // Re-run editors for just this angle by clearing its slot and asking
+  // the composable to recompile everything in selectedAngleIds. Simpler
+  // than threading a single-angle path through the composable.
+  store.setVariant(angleId, undefined as unknown as VariantDetail)
+  try {
+    await gen.runEditorsAndCompile()
+  } catch {
+    /* surfaced via errorMessage */
+  }
+}
 
 const focusedAngleId = ref<string | null>(null)
 const focused = computed(() =>
@@ -434,35 +448,61 @@ const openVariantInEditor = (angleId: string, schema: unknown) => {
           <article
             v-for="v in variants"
             :key="v.angleId"
-            class="rounded-lg border border-ink-700 bg-ink-800/50 p-4"
+            class="rounded-lg border p-4"
+            :class="v.error
+              ? 'border-red-500/40 bg-red-950/20'
+              : 'border-ink-700 bg-ink-800/50'"
           >
-            <SpreadPreview
-              v-if="v.schema"
-              :schema="v.schema"
-              :width="300"
-              :height="180"
-            />
-            <p class="mt-3 font-serif text-lg">{{ v.angle?.title }}</p>
-            <p class="text-xs text-ink-400">{{ v.angle?.oneliner }}</p>
-            <p class="mt-2 text-[10px] uppercase tracking-wide text-ink-500">
-              {{ v.angle?.recommendedEditor }}
-            </p>
-            <p v-if="v.output?.editorialNotes" class="mt-2 text-xs italic text-ink-300">
-              {{ v.output.editorialNotes }}
-            </p>
-            <p v-if="v.issues?.length" class="mt-2 text-[11px] text-yellow-300/80">
-              {{ v.issues.length }} замечание(й) валидатора
-            </p>
-            <div class="mt-3 flex gap-2">
-              <button
-                class="rounded bg-gold px-3 py-1 text-xs text-ink-900 hover:opacity-90"
-                @click="openVariantInEditor(v.angleId, v.schema)"
-              >Открыть в редакторе</button>
-              <button
-                class="rounded bg-ink-700 px-3 py-1 text-xs hover:bg-ink-600"
-                @click="focusedAngleId = v.angleId; step = 'detail'"
-              >Разобрать</button>
-            </div>
+            <!-- Error slot: editor (or compile) failed for this angle -->
+            <template v-if="v.error">
+              <div class="flex h-[180px] items-center justify-center rounded bg-red-950/30 text-xs text-red-300/80">
+                Редактор не справился
+              </div>
+              <p class="mt-3 font-serif text-lg">{{ v.angle?.title }}</p>
+              <p class="text-xs text-ink-400">{{ v.angle?.oneliner }}</p>
+              <p class="mt-2 text-[10px] uppercase tracking-wide text-ink-500">
+                {{ v.angle?.recommendedEditor }}
+              </p>
+              <p class="mt-2 break-words text-[11px] text-red-300/80">{{ v.error }}</p>
+              <div class="mt-3 flex gap-2">
+                <button
+                  class="rounded bg-ink-700 px-3 py-1 text-xs hover:bg-ink-600"
+                  :disabled="gen.isWorking.value"
+                  @click="retryAngle(v.angleId)"
+                >Перезапустить</button>
+              </div>
+            </template>
+
+            <!-- Success slot -->
+            <template v-else>
+              <SpreadPreview
+                v-if="v.schema"
+                :schema="v.schema"
+                :width="300"
+                :height="180"
+              />
+              <p class="mt-3 font-serif text-lg">{{ v.angle?.title }}</p>
+              <p class="text-xs text-ink-400">{{ v.angle?.oneliner }}</p>
+              <p class="mt-2 text-[10px] uppercase tracking-wide text-ink-500">
+                {{ v.angle?.recommendedEditor }}
+              </p>
+              <p v-if="v.output?.editorialNotes" class="mt-2 text-xs italic text-ink-300">
+                {{ v.output.editorialNotes }}
+              </p>
+              <p v-if="v.issues?.length" class="mt-2 text-[11px] text-yellow-300/80">
+                {{ v.issues.length }} замечание(й) валидатора
+              </p>
+              <div class="mt-3 flex gap-2">
+                <button
+                  class="rounded bg-gold px-3 py-1 text-xs text-ink-900 hover:opacity-90"
+                  @click="openVariantInEditor(v.angleId, v.schema)"
+                >Открыть в редакторе</button>
+                <button
+                  class="rounded bg-ink-700 px-3 py-1 text-xs hover:bg-ink-600"
+                  @click="focusedAngleId = v.angleId; step = 'detail'"
+                >Разобрать</button>
+              </div>
+            </template>
           </article>
         </div>
         <div class="mt-6 flex gap-3">

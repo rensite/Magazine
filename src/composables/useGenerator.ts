@@ -231,8 +231,14 @@ export const useGenerator = () => {
         total: Math.max(editorResults.length, 1),
       })
       const variants: CompiledVariant[] = []
+      const errors: string[] = []
       for (const r of editorResults) {
         if (!r.output) {
+          // Store a sentinel so the UI can render an error card rather
+          // than silently dropping the row and showing an empty grid.
+          const reason = r.error ?? 'Редактор не вернул ответ'
+          errors.push(`${r.angleId}: ${reason}`)
+          store.setVariant(r.angleId, { error: reason })
           store.bumpProgress()
           continue
         }
@@ -252,6 +258,12 @@ export const useGenerator = () => {
         store.bumpProgress()
       }
       store.setStatus('variants-ready')
+      // If literally nothing came back, lift the first error onto the
+      // session so the header banner explains the empty state instead of
+      // leaving the user staring at a blank grid.
+      if (variants.length === 0 && errors.length > 0) {
+        store.setError(`Все редакторы упали: ${errors.join(' · ')}`)
+      }
       return variants
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') throw err

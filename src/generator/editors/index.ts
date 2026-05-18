@@ -16,10 +16,29 @@ const ARCHETYPES: Partial<Record<EditorArchetypeId, EditorArchetype>> = {
   'nyt-longread': nytLongread,
 }
 
+// Schema accepts more archetype ids than we've actually implemented
+// (`apartamento`, `hiphop-underground` are v2). When the LLM picks one of
+// the unimplemented ids we route to the nearest implemented archetype
+// instead of failing the whole angle — failure here silently hides a
+// variant card in the UI, which is the worst possible behaviour.
+const FALLBACK_ROUTE: Record<EditorArchetypeId, EditorArchetypeId> = {
+  'japanese-lifestyle': 'japanese-lifestyle',
+  'swiss-book': 'swiss-book',
+  'nyt-longread': 'nyt-longread',
+  apartamento: 'japanese-lifestyle',
+  'hiphop-underground': 'nyt-longread',
+}
+
 export const getArchetype = (id: EditorArchetypeId): EditorArchetype => {
-  const a = ARCHETYPES[id]
-  if (!a) throw new Error(`Editor archetype "${id}" is not implemented in MVP.`)
-  return a
+  const direct = ARCHETYPES[id]
+  if (direct) return direct
+  const routed = ARCHETYPES[FALLBACK_ROUTE[id]]
+  if (routed) {
+    // eslint-disable-next-line no-console
+    console.warn(`[generator] editor "${id}" not implemented — routing to "${FALLBACK_ROUTE[id]}"`)
+    return routed
+  }
+  throw new Error(`Editor archetype "${id}" is not implemented and has no fallback.`)
 }
 
 export const availableArchetypes = (): EditorArchetype[] =>
