@@ -227,14 +227,14 @@ const issueRequest = async ({ url, body, signal, model, streaming }: RequestArgs
 
 export const geminiProvider: Provider = {
   id: 'gemini',
-  async complete({ system, messages, maxTokens, temperature, onToken, signal }) {
+  async complete({ system, messages, maxTokens, temperature, onToken, signal, preferredModel }) {
     const apiKey = getKey('gemini')
     const streaming = !!onToken
     const hasImages = messages.some((m) => m.images?.length)
-    // User-configured override (Settings UI) wins over the hard-coded default.
-    // Same override applies to both text and vision since Gemini 3 is unified
-    // multimodal — separate override per task would just be a footgun.
-    const model = getModelOverride('gemini') ?? (hasImages ? VISION_MODEL : TEXT_MODEL)
+    // User-configured override (Settings UI) wins over the caller's per-call
+    // preference, which in turn beats the hard-coded text/vision default.
+    const model =
+      getModelOverride('gemini') ?? preferredModel ?? (hasImages ? VISION_MODEL : TEXT_MODEL)
     const path = streaming ? 'streamGenerateContent' : 'generateContent'
     const url = `${BASE}/models/${model}:${path}?key=${apiKey}${streaming ? '&alt=sse' : ''}`
     const sys = system ?? systemFromMessages(messages)

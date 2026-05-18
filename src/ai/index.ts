@@ -110,6 +110,7 @@ const callProvider = async <T>(
     temperature: opts.temperature,
     onToken: opts.onToken,
     signal: opts.signal,
+    preferredModel: opts.preferredModel,
   })
   if (!opts.schema) return { result }
   const parsed = tryParse(result.text, opts.schema)
@@ -133,6 +134,7 @@ const callProvider = async <T>(
       // Streaming on retry would double-emit tokens to the UI; suppress.
       onToken: undefined,
       signal: opts.signal,
+      preferredModel: opts.preferredModel,
     })
     const retryParsed = tryParse(retryResult.text, opts.schema)
     if (retryParsed.ok) {

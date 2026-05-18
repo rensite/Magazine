@@ -108,13 +108,14 @@ const consumeStream = async (
 
 export const claudeProvider: Provider = {
   id: 'claude',
-  async complete({ system, messages, maxTokens, temperature, onToken, signal }) {
+  async complete({ system, messages, maxTokens, temperature, onToken, signal, preferredModel }) {
     const apiKey = getKey('claude')
     const streaming = !!onToken
     const sys = system ?? systemFromMessages(messages)
 
     const body = {
-      model: getModelOverride('claude') ?? DEFAULT_MODEL,
+      // Priority: user override (Settings) > caller's per-call preference > hardcoded default.
+      model: getModelOverride('claude') ?? preferredModel ?? DEFAULT_MODEL,
       max_tokens: maxTokens ?? 4096,
       temperature: temperature ?? 0.7,
       stream: streaming,

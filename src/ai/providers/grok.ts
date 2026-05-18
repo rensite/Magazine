@@ -112,11 +112,12 @@ const consumeStream = async (
 
 export const grokProvider: Provider = {
   id: 'grok',
-  async complete({ system, messages, maxTokens, temperature, onToken, signal }) {
+  async complete({ system, messages, maxTokens, temperature, onToken, signal, preferredModel }) {
     const apiKey = getKey('grok')
     const streaming = !!onToken
     const hasImages = messages.some((m) => m.images?.length)
-    const model = getModelOverride('grok') ?? (hasImages ? VISION_MODEL : TEXT_MODEL)
+    const model =
+      getModelOverride('grok') ?? preferredModel ?? (hasImages ? VISION_MODEL : TEXT_MODEL)
     const sys = system ?? systemFromMessages(messages)
 
     const body = {

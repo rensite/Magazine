@@ -52,6 +52,13 @@ export interface AiCallOptions<T = unknown> {
   messages?: Message[]
   /** Max output tokens. Provider-specific defaults apply if unset. */
   maxTokens?: number
+  /**
+   * Per-call model preference (e.g. `claude-sonnet-4-6` for an editor
+   * pass that needs more headroom than haiku). A user-configured model
+   * override from Settings still wins — this is just a stronger default
+   * than the provider's hardcoded one.
+   */
+  preferredModel?: string
   /** 0..1 — lower for structured tasks, higher for creative angles. */
   temperature?: number
   /** Token-by-token callback for streaming. */
@@ -117,6 +124,12 @@ export interface Provider {
     temperature?: number
     onToken?: (delta: string) => void
     signal?: AbortSignal
+    /**
+     * Caller-preferred model. Provider uses it only if the user has not
+     * set their own override in Settings — explicit user choice always
+     * wins.
+     */
+    preferredModel?: string
   }): Promise<CompletionResult>
   /** Optional — providers that support image generation. */
   generateImage?(args: {

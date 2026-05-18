@@ -25,6 +25,13 @@ const looseEditorOutputSchema = z.preprocess(
 // the structured-output retry has a fighting chance.
 const EDITOR_MAX_TOKENS = 8192
 
+// Editor is the highest-reasoning step in the pipeline: it has to hold the
+// brief + angle in mind and emit a self-consistent partitura with valid
+// cross-refs. Haiku reliably fails the schema here; sonnet handles it.
+// Users who want opus (or who already typed a model in Settings) get their
+// choice — this is just a stronger default than the provider's haiku.
+const EDITOR_PREFERRED_MODEL = 'claude-sonnet-4-6'
+
 const ARCHETYPES: Partial<Record<EditorArchetypeId, EditorArchetype>> = {
   'japanese-lifestyle': japaneseLifestyle,
   'swiss-book': swissBook,
@@ -87,6 +94,7 @@ export const runEditor = async (opts: RunEditorOptions): Promise<EditorOutput> =
     schema: looseEditorOutputSchema,
     temperature: 0.7,
     maxTokens: EDITOR_MAX_TOKENS,
+    preferredModel: EDITOR_PREFERRED_MODEL,
     promptVersion: `editor/${archId}/v1`,
     signal: opts.signal,
   })
