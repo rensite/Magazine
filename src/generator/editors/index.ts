@@ -1,6 +1,7 @@
 // Editor persona orchestration. Picks the right archetype, runs the LLM,
 // validates output, and stamps the angleId + archetypeId on the result.
 
+import { z } from 'zod'
 import { aiCall } from '@/ai'
 import type { Brief } from '../schemas/brief'
 import type { StoryAngle, EditorArchetypeId } from '../schemas/angle'
@@ -9,6 +10,20 @@ import { japaneseLifestyle } from './japaneseLifestyle'
 import { swissBook } from './swissBook'
 import { nytLongread } from './nytLongread'
 import type { EditorArchetype } from './types'
+import { normalizeEditorOutput } from './normalize'
+
+// Tolerant wrapper: fills synthetic ids, coerces stringified numbers,
+// drops orphan zones/violations — then hands off to the strict schema.
+// Saves a retry round-trip on the most common LLM mistakes.
+const looseEditorOutputSchema = z.preprocess(
+  normalizeEditorOutput,
+  editorLlmOutputSchema,
+)
+
+// Editor partituras are big (zones × accents × violations × palette + gaps).
+// The default 4096-token cap clips mid-JSON on detailed runs — bump it so
+// the structured-output retry has a fighting chance.
+const EDITOR_MAX_TOKENS = 8192
 
 const ARCHETYPES: Partial<Record<EditorArchetypeId, EditorArchetype>> = {
   'japanese-lifestyle': japaneseLifestyle,
@@ -69,8 +84,9 @@ export const runEditor = async (opts: RunEditorOptions): Promise<EditorOutput> =
   const { data } = await aiCall(prompt, {
     task: 'editor',
     system: SYSTEM,
-    schema: editorLlmOutputSchema,
+    schema: looseEditorOutputSchema,
     temperature: 0.7,
+    maxTokens: EDITOR_MAX_TOKENS,
     promptVersion: `editor/${archId}/v1`,
     signal: opts.signal,
   })
