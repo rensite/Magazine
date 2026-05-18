@@ -67,6 +67,26 @@ const readLastSessionId = (): string | null => {
   }
 }
 
+const WORKING_STATUSES: GenerationStatus[] = [
+  'uploading',
+  'analyzing',
+  'generating-angles',
+  'compiling',
+]
+
+/**
+ * Pick the most-advanced "ready" milestone the session's data actually
+ * supports. Used after restoring a session whose job was interrupted,
+ * so the UI doesn't stay stuck in a working state forever.
+ */
+const milestoneForData = (s: GenerationSession): GenerationStatus => {
+  if (!WORKING_STATUSES.includes(s.status)) return s.status
+  if (Object.keys(s.variants ?? {}).length > 0) return 'variants-ready'
+  if (s.angles) return 'angles-ready'
+  if (s.brief) return 'brief-ready'
+  return 'idle'
+}
+
 /** Coalesce overlapping patches in flight. Last write wins per field. */
 let pending: GenerationSessionPatch = {}
 let timer: ReturnType<typeof setTimeout> | null = null
@@ -128,6 +148,15 @@ export const useGeneratorStore = defineStore('generator', {
         this.session = await currentGenerationService().load(id)
         this.saveError = null
         rememberSessionId(this.session.id)
+        // A session whose status is mid-work was almost certainly
+        // interrupted (refresh, tab close, network drop). The job isn't
+        // running anymore — but `isWorking` keys off status, so leaving
+        // it as e.g. `compiling` permanently disables the "advance"
+        // buttons. Downgrade to the latest milestone the data supports.
+        const downgraded = milestoneForData(this.session)
+        if (downgraded !== this.session.status) {
+          this.patch({ status: downgraded })
+        }
       } finally {
         this.loading = false
       }
