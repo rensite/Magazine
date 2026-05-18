@@ -17,7 +17,7 @@
 **Никогда** не откатываться на `gemini-2.x` — даже flash-варианты семейства 2 не работают на текущем API.
 
 ### Claude / Grok
-Без специальных ограничений. Текущие defaults — `claude-3-5-sonnet-latest` и `grok-2-latest`. Можно обновлять при выходе новых релизов.
+Без специальных ограничений. Текущие defaults — `claude-haiku-4-5` (Anthropic 4.x: формат `claude-{tier}-{major}-{minor}`, без `-latest`; sonnet — `claude-sonnet-4-6`, opus — `claude-opus-4-7`) и `grok-3`. Можно обновлять при выходе новых релизов.
 
 ## API keys policy
 Ключи вводятся пользователем в Settings UI (🔑 кнопка в header) и хранятся в `localStorage` (`stan:ai-keys/v1`). `VITE_*_API_KEY` в `.env.local` — только dev fallback. Подробности — в комментарии в [src/ai/keys.ts](src/ai/keys.ts).

@@ -11,7 +11,7 @@ import { getKey, getModelOverride } from '../keys'
 
 const API_URL = 'https://api.anthropic.com/v1/messages'
 const API_VERSION = '2023-06-01'
-const DEFAULT_MODEL = 'claude-3-5-sonnet-latest'
+const DEFAULT_MODEL = 'claude-haiku-4-5'
 
 interface AnthropicContentBlock {
   type: 'text' | 'image'

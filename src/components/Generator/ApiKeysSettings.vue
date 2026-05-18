@@ -35,8 +35,8 @@ const providers: ProviderRow[] = [
     placeholder: 'sk-ant-…',
     href: 'https://console.anthropic.com/settings/keys',
     note: 'Text analyst, story angles, editor personas.',
-    defaultModel: 'claude-3-5-sonnet-latest',
-    modelHint: 'e.g. claude-3-5-sonnet-latest, claude-3-5-haiku-latest',
+    defaultModel: 'claude-haiku-4-5',
+    modelHint: 'e.g. claude-haiku-4-5 (default), claude-sonnet-4-6, claude-opus-4-7',
   },
   {
     id: 'gemini',
