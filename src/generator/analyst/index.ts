@@ -22,6 +22,12 @@ export interface AnalyzeInput {
   images: RawImageInput[]
   uiLanguage?: string
   signal?: AbortSignal
+  /**
+   * Called as each image's vision analysis settles (success or skipped
+   * failure). `done` is the count of completed images so far, `total`
+   * is the batch size. Used by the UI to render a per-stage counter.
+   */
+  onImageProgress?: (done: number, total: number) => void
 }
 
 /**
@@ -32,6 +38,15 @@ export interface AnalyzeInput {
  */
 export const runAnalyst = async (input: AnalyzeInput): Promise<Brief> => {
   const lang = input.uiLanguage ?? 'ru'
+  const total = input.images.length
+  let done = 0
+  const tick = () => {
+    done += 1
+    input.onImageProgress?.(done, total)
+  }
+  // Emit a 0/total tick so the UI can render the counter immediately
+  // instead of waiting for the first image to settle.
+  input.onImageProgress?.(0, total)
   const textPromise = analyzeText(input.rawText, lang, input.signal)
   const imagePromises = input.images.map(async (img): Promise<Media | null> => {
     try {
@@ -43,6 +58,8 @@ export const runAnalyst = async (input: AnalyzeInput): Promise<Brief> => {
       // eslint-disable-next-line no-console
       console.warn(`[generator] vision analysis failed for ${img.id}:`, err)
       return null
+    } finally {
+      tick()
     }
   })
   const [content, mediaResults] = await Promise.all([textPromise, Promise.all(imagePromises)])

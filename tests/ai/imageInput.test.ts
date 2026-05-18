@@ -27,12 +27,22 @@ afterEach(() => {
 })
 
 describe('normalizeImageInput', () => {
-  it('passes HTTPS URLs through untouched', async () => {
+  it('fetches HTTPS URLs and inlines as base64 (aggressive recompress)', async () => {
+    stubFetchWithBlob('image/jpeg', ([5, 6, 7]))
+    const out = await normalizeImageInput({ url: 'https://x/y.jpg' })
+    // Small payloads short-circuit the compress step and are inlined as-is.
+    expect(out.base64).toBeTruthy()
+    expect(out.mimeType).toBe('image/jpeg')
+    expect(out.url).toBeUndefined()
+  })
+
+  it('falls back to the original input when an HTTPS fetch fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 502 })))
     const out = await normalizeImageInput({ url: 'https://x/y.jpg' })
     expect(out).toEqual({ url: 'https://x/y.jpg' })
   })
 
-  it('passes already-inline base64 through untouched', async () => {
+  it('passes already-inline small base64 through untouched', async () => {
     const out = await normalizeImageInput({ base64: 'AAA', mimeType: 'image/png' })
     expect(out).toEqual({ base64: 'AAA', mimeType: 'image/png' })
   })
@@ -83,7 +93,9 @@ describe('normalizeImageInputs', () => {
       { base64: 'PRE', mimeType: 'image/webp' },
     ])
     expect(out).toBeDefined()
-    expect(out![0]).toEqual({ url: 'https://x/a.jpg' })
+    // Every URL — http(s) or blob: — is now fetched + inlined.
+    expect(out![0].base64).toBeTruthy()
+    expect(out![0].url).toBeUndefined()
     expect(out![1].base64).toBeTruthy()
     expect(out![2]).toEqual({ base64: 'PRE', mimeType: 'image/webp' })
   })

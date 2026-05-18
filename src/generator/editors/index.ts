@@ -74,7 +74,11 @@ export const runEditorsForAngles = async (
   angles: StoryAngle[],
   uiLanguage: string,
   signal?: AbortSignal,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<Array<{ angleId: string; output: EditorOutput | null; error?: string }>> => {
+  const total = angles.length
+  let done = 0
+  onProgress?.(0, total)
   const results = await Promise.all(
     angles.map(async (angle) => {
       try {
@@ -87,6 +91,9 @@ export const runEditorsForAngles = async (
           output: null,
           error: err instanceof Error ? err.message : String(err),
         }
+      } finally {
+        done += 1
+        onProgress?.(done, total)
       }
     }),
   )

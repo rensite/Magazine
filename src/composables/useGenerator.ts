@@ -100,10 +100,21 @@ export const useGenerator = () => {
     const ctrl = new AbortController()
     abortController.value = ctrl
     try {
-      const rawText = store.materials
-        .filter((m) => m.kind === 'text' && m.inlineText)
-        .map((m) => m.inlineText!)
-        .join('\n\n')
+      // Bundle every text material into one prompt payload, prefixed with
+      // a header so the analyst can attribute structure to source files
+      // (e.g. "intro.md" vs. "notes.txt"). A single file ships as-is.
+      const textMaterials = store.materials.filter(
+        (m) => m.kind === 'text' && m.inlineText,
+      )
+      const rawText =
+        textMaterials.length === 1
+          ? textMaterials[0].inlineText!
+          : textMaterials
+              .map(
+                (m, i) =>
+                  `=== ${m.filename ?? `file-${i + 1}.txt`} ===\n${m.inlineText!}`,
+              )
+              .join('\n\n')
       const techBag =
         (store.session as { __imageTech?: Record<string, MediaTechMeta> } | null)?.__imageTech ?? {}
       const images = store.materials
@@ -119,11 +130,23 @@ export const useGenerator = () => {
           },
           userHint: m.userHint,
         }))
+      store.setProgress({
+        stage: 'analyzing',
+        label: images.length > 0 ? 'Анализ фото' : 'Анализ текста',
+        current: 0,
+        total: Math.max(images.length, 1),
+      })
       const brief = await runAnalyst({
         rawText,
         images,
         uiLanguage,
         signal: ctrl.signal,
+        onImageProgress: (done, total) => store.setProgress({
+          stage: 'analyzing',
+          label: 'Анализ фото',
+          current: done,
+          total,
+        }),
       })
       store.setBrief(brief)
       return brief
@@ -132,6 +155,7 @@ export const useGenerator = () => {
       store.setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
+      store.setProgress(null)
       abortController.value = null
     }
   }
@@ -140,6 +164,9 @@ export const useGenerator = () => {
   const runAngles = async (count = 4, uiLanguage = 'ru'): Promise<StoryAngle[]> => {
     if (!store.session?.brief) throw new Error('No brief')
     store.setStatus('generating-angles')
+    // Single AI call — counter stays at 0/1 until it resolves. We still
+    // surface the stage label so the progress bar shows the active step.
+    store.setProgress({ stage: 'angles', label: 'Генерируем углы', current: 0, total: 1 })
     const ctrl = new AbortController()
     abortController.value = ctrl
     try {
@@ -155,6 +182,7 @@ export const useGenerator = () => {
       store.setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
+      store.setProgress(null)
       abortController.value = null
     }
   }
@@ -176,10 +204,38 @@ export const useGenerator = () => {
       const angles = store.session.angles as StoryAngle[]
       const selected = angles.filter((a) => store.session!.selectedAngleIds.includes(a.id))
       const brief = store.session.brief as Brief
-      const editorResults = await runEditorsForAngles(brief, selected, uiLanguage, ctrl.signal)
+      store.setProgress({
+        stage: 'editors',
+        label: 'Редакторы пишут варианты',
+        current: 0,
+        total: Math.max(selected.length, 1),
+      })
+      const editorResults = await runEditorsForAngles(
+        brief,
+        selected,
+        uiLanguage,
+        ctrl.signal,
+        (done, total) => store.setProgress({
+          stage: 'editors',
+          label: 'Редакторы пишут варианты',
+          current: done,
+          total,
+        }),
+      )
+      // Compile + validate is fast (no network) but worth flagging so the
+      // bar advances visually rather than freezing at the editors stage.
+      store.setProgress({
+        stage: 'compiling',
+        label: 'Сборка макета',
+        current: 0,
+        total: Math.max(editorResults.length, 1),
+      })
       const variants: CompiledVariant[] = []
       for (const r of editorResults) {
-        if (!r.output) continue
+        if (!r.output) {
+          store.bumpProgress()
+          continue
+        }
         const schema = compile({ brief, output: r.output })
         const validation = validate(schema, { autoCorrect: true })
         variants.push({
@@ -193,6 +249,7 @@ export const useGenerator = () => {
           schema: validation.schema,
           issues: validation.issues,
         })
+        store.bumpProgress()
       }
       store.setStatus('variants-ready')
       return variants
@@ -201,6 +258,7 @@ export const useGenerator = () => {
       store.setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
+      store.setProgress(null)
       abortController.value = null
     }
   }

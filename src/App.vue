@@ -15,6 +15,7 @@ import GeneratorView from '@/components/Generator/GeneratorView.vue'
 import ApiKeysSettings from '@/components/Generator/ApiKeysSettings.vue'
 import { useSpreadStore } from '@/stores/spreadStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useGeneratorStore } from '@/stores/generatorStore'
 import { supabaseSpreadService } from '@/services/spreadService'
 import { usePersistence } from '@/composables/usePersistence'
 import { useImageUrls } from '@/composables/useImageUrls'
@@ -62,6 +63,7 @@ const handleVariantOpened = async (payload: { angleId: string; schema: unknown }
 
 const store = useSpreadStore()
 const auth = useAuthStore()
+const generatorStore = useGeneratorStore()
 
 const persistence = usePersistence(supabaseSpreadService)
 provide('forceSave', persistence.forceSave)
@@ -301,6 +303,17 @@ const onOpenApiKeys = () => {
   isApiKeysOpen.value = true
 }
 onMounted(() => window.addEventListener('stan:open-api-keys', onOpenApiKeys))
+
+// Flush the generator's debounced patch buffer on page hide. Without this,
+// hitting F5 within the 400 ms debounce window drops the most-recent
+// pipeline result (e.g. the layout schema from stage 4) and the user
+// comes back to an earlier stage. `pagehide` is more reliable than
+// `beforeunload` (covers mobile/bfcache) and the fetch supabase-js fires
+// inherits the keepalive semantics of any in-flight request.
+const flushGeneratorOnHide = () => {
+  if (generatorStore.hasSession) void generatorStore.flushPending()
+}
+onMounted(() => window.addEventListener('pagehide', flushGeneratorOnHide))
 </script>
 
 <template>

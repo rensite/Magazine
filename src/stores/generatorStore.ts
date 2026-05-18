@@ -17,6 +17,23 @@ import {
 } from '@/services/generationService'
 import type { SpreadSchema } from '@/types/element'
 
+/**
+ * Transient pipeline progress for the active stage. Not persisted: it
+ * describes "what's happening right now" (e.g. "analyzing image 3/8"),
+ * which is meaningless after a refresh — the underlying status field on
+ * the session is what survives. UI reads this to render the progress bar
+ * above the stage cards.
+ */
+export interface PipelineProgress {
+  /** Which pipeline stage produces this progress signal. */
+  stage: 'analyzing' | 'angles' | 'editors' | 'compiling'
+  /** Human-readable label shown next to the counter, e.g. "Анализ фото". */
+  label: string
+  /** 0..total. When current === total the stage just finished. */
+  current: number
+  total: number
+}
+
 interface State {
   session: GenerationSession | null
   list: GenerationListItem[]
@@ -24,9 +41,31 @@ interface State {
   saving: boolean
   /** UI-only: surface a save error without overwriting the live session. */
   saveError: string | null
+  /** Transient per-item progress for the running stage; null when idle. */
+  progress: PipelineProgress | null
 }
 
 const DEBOUNCE_MS = 400
+
+/** localStorage key for the most-recently-touched generator session id. */
+const LAST_SESSION_KEY = 'stan:lastGeneratorSessionId'
+
+const rememberSessionId = (id: string | null): void => {
+  try {
+    if (id) localStorage.setItem(LAST_SESSION_KEY, id)
+    else localStorage.removeItem(LAST_SESSION_KEY)
+  } catch {
+    /* private mode / quota — ignore */
+  }
+}
+
+const readLastSessionId = (): string | null => {
+  try {
+    return localStorage.getItem(LAST_SESSION_KEY)
+  } catch {
+    return null
+  }
+}
 
 /** Coalesce overlapping patches in flight. Last write wins per field. */
 let pending: GenerationSessionPatch = {}
@@ -40,6 +79,7 @@ export const useGeneratorStore = defineStore('generator', {
     loading: false,
     saving: false,
     saveError: null,
+    progress: null,
   }),
 
   getters: {
@@ -65,6 +105,7 @@ export const useGeneratorStore = defineStore('generator', {
       try {
         this.session = await currentGenerationService().create({ title, rawMaterials })
         this.saveError = null
+        rememberSessionId(this.session.id)
         // Also refresh the list so the new session appears in any picker.
         this.list = [
           {
@@ -86,14 +127,37 @@ export const useGeneratorStore = defineStore('generator', {
       try {
         this.session = await currentGenerationService().load(id)
         this.saveError = null
+        rememberSessionId(this.session.id)
       } finally {
         this.loading = false
       }
     },
 
+    /**
+     * Attempt to re-open the last session the user worked on. Returns true
+     * if a session was hydrated. Silently no-ops if there's no remembered
+     * id or the row is gone (e.g. deleted from another tab). Called on
+     * Generator surface mount so a page refresh resumes mid-pipeline.
+     */
+    async tryRestoreLastSession(): Promise<boolean> {
+      const id = readLastSessionId()
+      if (!id) return false
+      try {
+        await this.openSession(id)
+        return true
+      } catch {
+        // Stale id (deleted/permissions) — forget it so we don't loop.
+        rememberSessionId(null)
+        return false
+      }
+    },
+
     closeSession() {
       // Flush any pending writes before clearing local state, otherwise
-      // the user loses in-progress edits on tab close.
+      // the user loses in-progress edits on tab close. We deliberately
+      // do NOT forget the lastSessionId here: closing the Generator
+      // surface is a navigation event, not a deletion — the user should
+      // be able to resume by reopening the surface or refreshing.
       this.flushPending()
       this.session = null
       pending = {}
@@ -176,6 +240,17 @@ export const useGeneratorStore = defineStore('generator', {
 
     setStatus(status: GenerationStatus) {
       this.patch({ status })
+    },
+
+    /** Replace the transient progress payload. Pass null to clear. */
+    setProgress(p: PipelineProgress | null) {
+      this.progress = p
+    },
+
+    /** Bump the counter of an in-flight progress payload. No-op if cleared. */
+    bumpProgress(delta = 1) {
+      if (!this.progress) return
+      this.progress = { ...this.progress, current: this.progress.current + delta }
     },
 
     setError(message: string | null) {

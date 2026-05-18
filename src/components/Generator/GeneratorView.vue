@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import SpreadPreview from '@/components/SpreadPreview.vue'
+import PipelineProgress from '@/components/Generator/PipelineProgress.vue'
 import { useGenerator } from '@/composables/useGenerator'
 import { useGapActions } from '@/composables/useGapActions'
 import { hasKey } from '@/ai/keys'
@@ -48,6 +49,47 @@ const openApiKeys = () => {
 // Step machine: 'upload' → 'brief' → 'angles' → 'variants' → 'detail'
 type Step = 'upload' | 'brief' | 'angles' | 'variants' | 'detail'
 const step = ref<Step>('upload')
+
+// Map persisted session.status → UI step so refresh resumes where we left
+// off. Statuses are authoritative; local `step` shadows them between user
+// actions and the next status change.
+const statusToStep = (status: string | undefined): Step => {
+  switch (status) {
+    case 'analyzing':
+    case 'brief-ready':
+      return 'brief'
+    case 'generating-angles':
+    case 'angles-ready':
+      return 'angles'
+    case 'compiling':
+    case 'variants-ready':
+      return 'variants'
+    case 'opened-in-editor':
+      return 'detail'
+    default:
+      return 'upload'
+  }
+}
+
+// On surface open: if no live session, try to rehydrate the last one the
+// user touched. Then sync `step` to whatever stage the session is in.
+onMounted(async () => {
+  if (!store.session) {
+    await store.tryRestoreLastSession()
+  }
+  step.value = statusToStep(store.session?.status)
+})
+
+// If status advances (e.g. a background job finishes after the user
+// switches tabs and comes back), keep the step in sync. We never use this
+// to roll the user backward — local actions still drive forward motion.
+watch(
+  () => store.session?.status,
+  (status) => {
+    const next = statusToStep(status)
+    if (next !== 'upload') step.value = next
+  },
+)
 
 const errorMessage = computed(() => store.session?.errorMessage ?? null)
 
@@ -193,6 +235,8 @@ const openVariantInEditor = (angleId: string, schema: unknown) => {
         >Закрыть</button>
       </div>
     </header>
+
+    <PipelineProgress :step="step" />
 
     <main class="flex-1 overflow-y-auto px-6 py-8">
       <!-- First-run banner: no provider configured yet. -->

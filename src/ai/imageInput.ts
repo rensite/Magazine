@@ -1,62 +1,79 @@
 // Normalize ImageInput for provider consumption.
 //
-// LLM providers accept HTTPS URLs OR base64 bytes for image attachments
-// — but NOT browser-internal `blob:` / `data:` URLs. The Generator UI
-// hands off blob: URLs from `URL.createObjectURL(file)` so the upload
-// step has no Supabase dependency for demos.
+// Two responsibilities:
+//   1. Providers cannot fetch browser-internal `blob:` / `data:` URLs —
+//      we resolve those locally before sending.
+//   2. Every image is aggressively recompressed (target ~50 KB) before
+//      going to the LLM. Editorial-classifier tasks don't benefit from
+//      full-resolution payloads, and the network/token cost adds up
+//      across batches. Originals stay in app state for UI rendering.
 //
-// This module bridges the gap: if a URL is HTTPS, we pass it through.
-// If it's blob: or data:, we fetch the bytes locally and re-emit the
-// ImageInput as `{ base64, mimeType }` which every provider knows how
-// to serialize.
+// If compression fails for any reason (e.g. exotic codec the browser
+// can't decode), we fall back to passing the URL through unchanged so
+// the provider has a chance to fetch it itself.
 
 import type { ImageInput } from './types'
+import { base64ToBlob, blobToBase64, compressImageBlob } from './compressImage'
 
-/** Read a Blob into a base64 string (no `data:` prefix). */
-const blobToBase64 = (blob: Blob): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const raw = String(reader.result ?? '')
-      // FileReader yields `data:<mime>;base64,<payload>` — strip the prefix.
-      const i = raw.indexOf(',')
-      resolve(i >= 0 ? raw.slice(i + 1) : raw)
-    }
-    reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'))
-    reader.readAsDataURL(blob)
-  })
+/** Skip recompression if the input is already this small (bytes). */
+const SKIP_COMPRESS_BELOW = 30_000
 
-const needsConversion = (url: string): boolean =>
-  url.startsWith('blob:') || url.startsWith('data:')
+const approxBase64Bytes = (b64: string): number => Math.floor((b64.length * 3) / 4)
 
-/**
- * Normalize one ImageInput so providers don't see local-only URLs.
- * Pass-through for HTTPS / gs:// / etc. Fetches+base64 for blob:/data:.
- */
-export const normalizeImageInput = async (img: ImageInput): Promise<ImageInput> => {
-  if (img.base64) return img // already inline
-  if (!img.url) return img
-  if (!needsConversion(img.url)) return img
-  // blob: URLs are revocable; if the user already revoked the object URL
-  // we'll get a fetch error here — surface a readable message.
-  let blob: Blob
-  try {
-    const res = await fetch(img.url)
-    if (!res.ok) throw new Error(`fetch blob ${res.status}`)
-    blob = await res.blob()
-  } catch (err) {
-    throw new Error(
-      `Could not read local image (${img.url.slice(0, 32)}…): ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    )
-  }
-  const mimeType = img.mimeType ?? blob.type ?? 'image/jpeg'
-  const base64 = await blobToBase64(blob)
-  return { base64, mimeType }
+const fetchAsBlob = async (url: string): Promise<Blob> => {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`fetch image ${res.status}`)
+  return res.blob()
 }
 
-/** Bulk-normalize an array. Errors from individual images bubble up. */
+export const normalizeImageInput = async (img: ImageInput): Promise<ImageInput> => {
+  let source: Blob | null = null
+  let sourceMime: string | undefined
+
+  if (img.base64) {
+    if (approxBase64Bytes(img.base64) <= SKIP_COMPRESS_BELOW) return img
+    source = base64ToBlob(img.base64, img.mimeType ?? 'image/jpeg')
+    sourceMime = img.mimeType
+  } else if (img.url) {
+    try {
+      source = await fetchAsBlob(img.url)
+      sourceMime = source.type || undefined
+    } catch (err) {
+      // For blob:/data: URLs we have no fallback — the provider can't
+      // fetch them either, so surface the error.
+      if (img.url.startsWith('blob:') || img.url.startsWith('data:')) {
+        throw new Error(
+          `Could not read local image (${img.url.slice(0, 32)}…): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        )
+      }
+      // For http(s) URLs, let the provider try to fetch it directly.
+      return img
+    }
+  } else {
+    return img
+  }
+
+  if (source.size <= SKIP_COMPRESS_BELOW) {
+    const base64 = await blobToBase64(source)
+    return { base64, mimeType: source.type || sourceMime || 'image/jpeg' }
+  }
+
+  try {
+    const { base64, mimeType } = await compressImageBlob(source)
+    return { base64, mimeType }
+  } catch {
+    // Decode failed (e.g. HEIC). If we at least have the original blob,
+    // pass it as base64 unchanged; otherwise pass the URL through.
+    if (source) {
+      const base64 = await blobToBase64(source)
+      return { base64, mimeType: source.type || sourceMime || 'image/jpeg' }
+    }
+    return img
+  }
+}
+
 export const normalizeImageInputs = async (
   images: ImageInput[] | undefined,
 ): Promise<ImageInput[] | undefined> => {
