@@ -96,6 +96,9 @@ export const useGenerator = () => {
   /** Step 2: run Layer 1 (analyst). */
   const runAnalysis = async (uiLanguage = 'ru'): Promise<Brief> => {
     if (!store.session) throw new Error('No active session')
+    // Clear any error from the previous attempt so retries don't show
+    // a stale "all editors failed" banner from a run before the fix.
+    store.setError(null)
     store.setStatus('analyzing')
     const ctrl = new AbortController()
     abortController.value = ctrl
@@ -163,6 +166,7 @@ export const useGenerator = () => {
   /** Step 3: generate story angles. */
   const runAngles = async (count = 4, uiLanguage = 'ru'): Promise<StoryAngle[]> => {
     if (!store.session?.brief) throw new Error('No brief')
+    store.setError(null)
     store.setStatus('generating-angles')
     // Single AI call — counter stays at 0/1 until it resolves. We still
     // surface the stage label so the progress bar shows the active step.
@@ -197,6 +201,7 @@ export const useGenerator = () => {
     if (!store.session?.brief || !store.session.angles) {
       throw new Error('Brief/angles not ready')
     }
+    store.setError(null)
     store.setStatus('compiling')
     const ctrl = new AbortController()
     abortController.value = ctrl
