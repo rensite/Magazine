@@ -46,13 +46,10 @@ const openApiKeys = () => {
   window.dispatchEvent(new CustomEvent('stan:open-api-keys'))
 }
 
-// Step machine: 'upload' → 'brief' → 'angles' → 'variants' → 'detail'
-type Step = 'upload' | 'brief' | 'angles' | 'variants' | 'detail'
+// Step machine: 'upload' → 'brief' → 'angles' → 'preview' → 'variants' → 'detail'
+type Step = 'upload' | 'brief' | 'angles' | 'preview' | 'variants' | 'detail'
 const step = ref<Step>('upload')
 
-// Map persisted session.status → UI step so refresh resumes where we left
-// off. Statuses are authoritative; local `step` shadows them between user
-// actions and the next status change.
 const statusToStep = (status: string | undefined): Step => {
   switch (status) {
     case 'analyzing':
@@ -61,6 +58,9 @@ const statusToStep = (status: string | undefined): Step => {
     case 'generating-angles':
     case 'angles-ready':
       return 'angles'
+    case 'previewing':
+    case 'previews-ready':
+      return 'preview'
     case 'compiling':
     case 'variants-ready':
       return 'variants'
@@ -163,6 +163,16 @@ const toggleAngle = (id: string) => {
   selectedAngleIds.value = [...next]
 }
 
+const generatePreviews = async () => {
+  if (selectedAngleIds.value.length === 0) return
+  step.value = 'preview'
+  try {
+    await gen.runAnglePreviews()
+  } catch {
+    /* surfaced via errorMessage */
+  }
+}
+
 const generateVariants = async () => {
   if (selectedAngleIds.value.length === 0) return
   step.value = 'variants'
@@ -171,6 +181,41 @@ const generateVariants = async () => {
   } catch {
     /* surfaced */
   }
+}
+
+// ---------- Step 3.5: angle previews ----------
+interface PreviewBlock {
+  id: string
+  kind: string
+  summary: string
+  contentRef?: string
+  mediaRef?: string
+  note?: string
+}
+interface AnglePreviewData {
+  angleId: string
+  blocks: PreviewBlock[]
+  pacing?: 'dense' | 'balanced' | 'spacious'
+}
+const selectedAnglesWithPreview = computed(() => {
+  return angles.value
+    .filter((a) => selectedAngleIds.value.includes(a.id))
+    .map((a) => ({
+      angle: a,
+      preview: (a as StoryAngle & { preview?: AnglePreviewData }).preview ?? null,
+    }))
+})
+
+const briefForPreview = computed(() => store.session?.brief as Brief | null)
+const sectionLabel = (id?: string): string => {
+  if (!id || !briefForPreview.value) return ''
+  const s = briefForPreview.value.content.structure.sections.find((x) => x.id === id)
+  return s ? (s.heading || s.content.slice(0, 40) + '…') : id
+}
+const mediaLabel = (id?: string): string => {
+  if (!id || !briefForPreview.value) return ''
+  const m = briefForPreview.value.media.find((x) => x.id === id)
+  return m ? m.semantic.subjectDetail : id
 }
 
 // ---------- Step 4: variants ----------
@@ -278,7 +323,9 @@ const openVariantInEditor = (angleId: string, schema: unknown) => {
         <li>·</li>
         <li :class="step === 'angles' ? 'text-gold' : ''">3. Углы</li>
         <li>·</li>
-        <li :class="step === 'variants' || step === 'detail' ? 'text-gold' : ''">4. Варианты</li>
+        <li :class="step === 'preview' ? 'text-gold' : ''">4. План</li>
+        <li>·</li>
+        <li :class="step === 'variants' || step === 'detail' ? 'text-gold' : ''">5. Варианты</li>
       </ol>
 
       <!-- Step 1: upload -->
@@ -433,12 +480,81 @@ const openVariantInEditor = (angleId: string, schema: unknown) => {
           <button
             :disabled="selectedAngleIds.length === 0 || gen.isWorking.value"
             class="rounded bg-gold px-4 py-2 text-sm text-ink-900 hover:opacity-90 disabled:opacity-40"
-            @click="generateVariants"
-          >Собрать варианты ({{ selectedAngleIds.length }}) →</button>
+            @click="generatePreviews"
+          >Готовим план ({{ selectedAngleIds.length }}) →</button>
         </div>
       </section>
 
-      <!-- Step 4: variants -->
+      <!-- Step 4: angle previews -->
+      <section v-else-if="step === 'preview'" class="max-w-5xl">
+        <h2 class="mb-4 font-serif text-2xl">План разворота</h2>
+        <p class="mb-6 text-xs text-ink-400">
+          Подробная раскадровка по блокам — текст, фото, заметки редактора. Подтверди, чтобы редакторы превратили план в макет.
+        </p>
+        <div v-if="selectedAnglesWithPreview.length === 0" class="text-sm text-ink-400">
+          Не выбрано ни одного угла.
+        </div>
+        <div v-else class="space-y-8">
+          <article
+            v-for="row in selectedAnglesWithPreview"
+            :key="row.angle.id"
+            class="rounded-lg border border-ink-700 bg-ink-800/40 p-5"
+          >
+            <header class="mb-3 flex items-baseline justify-between gap-4">
+              <div>
+                <h3 class="font-serif text-xl">{{ row.angle.title }}</h3>
+                <p class="text-xs text-ink-400">{{ row.angle.oneliner }}</p>
+              </div>
+              <span
+                v-if="row.preview?.pacing"
+                class="rounded bg-ink-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-ink-300"
+              >ритм · {{ row.preview.pacing }}</span>
+            </header>
+
+            <div v-if="!row.preview && gen.isWorking.value" class="text-xs text-ink-400">
+              Готовим план для этого угла…
+            </div>
+            <div v-else-if="!row.preview" class="text-xs text-red-300/80">
+              План не получился. Попробуй «Готовим план» ещё раз.
+            </div>
+            <ol v-else class="space-y-2">
+              <li
+                v-for="b in row.preview.blocks"
+                :key="b.id"
+                class="rounded border border-ink-700 bg-ink-900/50 px-3 py-2 text-sm"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="rounded bg-gold/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-gold">{{ b.kind }}</span>
+                  <span class="text-ink-100">{{ b.summary }}</span>
+                </div>
+                <p v-if="b.contentRef" class="mt-1 text-[11px] text-ink-400">
+                  → текст: <span class="text-ink-300">{{ sectionLabel(b.contentRef) }}</span>
+                </p>
+                <p v-if="b.mediaRef" class="mt-1 text-[11px] text-ink-400">
+                  → фото: <span class="text-ink-300">{{ mediaLabel(b.mediaRef) }}</span>
+                </p>
+                <p v-if="b.note" class="mt-1 text-[11px] italic text-ink-400">{{ b.note }}</p>
+              </li>
+            </ol>
+          </article>
+        </div>
+
+        <div class="mt-6 flex gap-3">
+          <button class="rounded bg-ink-700 px-3 py-1.5 text-sm hover:bg-ink-600" @click="step = 'angles'">← К углам</button>
+          <button
+            :disabled="gen.isWorking.value"
+            class="rounded bg-ink-700 px-3 py-1.5 text-sm hover:bg-ink-600 disabled:opacity-40"
+            @click="generatePreviews"
+          >Перегенерировать план</button>
+          <button
+            :disabled="gen.isWorking.value || selectedAnglesWithPreview.every((r) => !r.preview)"
+            class="rounded bg-gold px-4 py-2 text-sm text-ink-900 hover:opacity-90 disabled:opacity-40"
+            @click="generateVariants"
+          >Собрать варианты →</button>
+        </div>
+      </section>
+
+      <!-- Step 5: variants -->
       <section v-else-if="step === 'variants'" class="max-w-6xl">
         <h2 class="mb-4 font-serif text-2xl">Варианты разворота</h2>
         <div v-if="variants.length === 0 && gen.isWorking.value" class="text-sm text-ink-400">

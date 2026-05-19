@@ -71,6 +71,7 @@ const WORKING_STATUSES: GenerationStatus[] = [
   'uploading',
   'analyzing',
   'generating-angles',
+  'previewing',
   'compiling',
 ]
 
@@ -79,9 +80,15 @@ const WORKING_STATUSES: GenerationStatus[] = [
  * supports. Used after restoring a session whose job was interrupted,
  * so the UI doesn't stay stuck in a working state forever.
  */
+const anyAnglePreviews = (angles: unknown): boolean => {
+  if (!Array.isArray(angles)) return false
+  return angles.some((a) => a && typeof a === 'object' && 'preview' in a)
+}
+
 const milestoneForData = (s: GenerationSession): GenerationStatus => {
   if (!WORKING_STATUSES.includes(s.status)) return s.status
   if (Object.keys(s.variants ?? {}).length > 0) return 'variants-ready'
+  if (anyAnglePreviews(s.angles)) return 'previews-ready'
   if (s.angles) return 'angles-ready'
   if (s.brief) return 'brief-ready'
   return 'idle'
@@ -311,6 +318,26 @@ export const useGeneratorStore = defineStore('generator', {
         selectedAngleIds: selectedIds,
         status: 'angles-ready',
       })
+    },
+
+    /**
+     * Attach a block-by-block preview to a specific angle in the session.
+     * Stored as an extra field on the angle object (the angles blob is
+     * persisted as opaque JSON, so we get free persistence without a DB
+     * migration). Pass null to clear that angle's preview.
+     */
+    setAnglePreview(angleId: string, preview: unknown | null) {
+      if (!this.session) return
+      const current = this.session.angles
+      if (!Array.isArray(current)) return
+      const next = current.map((a) => {
+        if (!a || typeof a !== 'object' || (a as { id?: string }).id !== angleId) return a
+        const clone: Record<string, unknown> = { ...(a as Record<string, unknown>) }
+        if (preview === null) delete clone.preview
+        else clone.preview = preview
+        return clone
+      })
+      this.patch({ angles: next })
     },
 
     setVariant(angleId: string, variant: unknown) {

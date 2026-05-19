@@ -13,6 +13,8 @@ export type GenerationStatus =
   | 'brief-ready'
   | 'generating-angles'
   | 'angles-ready'
+  | 'previewing'
+  | 'previews-ready'
   | 'compiling'
   | 'variants-ready'
   | 'opened-in-editor'

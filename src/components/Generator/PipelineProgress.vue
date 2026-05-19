@@ -12,8 +12,8 @@
 import { computed } from 'vue'
 import { useGeneratorStore, type PipelineProgress } from '@/stores/generatorStore'
 
-type Step = 'upload' | 'brief' | 'angles' | 'variants' | 'detail'
-type Stage = 'brief' | 'angles' | 'variants' | 'result'
+type Step = 'upload' | 'brief' | 'angles' | 'preview' | 'variants' | 'detail'
+type Stage = 'brief' | 'angles' | 'preview' | 'variants' | 'result'
 
 const props = defineProps<{ step: Step }>()
 
@@ -23,6 +23,7 @@ const progress = computed<PipelineProgress | null>(() => store.progress)
 const stages: Array<{ id: Stage; label: string }> = [
   { id: 'brief', label: 'Бриф' },
   { id: 'angles', label: 'Углы' },
+  { id: 'preview', label: 'План' },
   { id: 'variants', label: 'Варианты' },
   { id: 'result', label: 'Готово' },
 ]
@@ -32,28 +33,36 @@ const stepOrder: Record<Step, number> = {
   upload: 0,
   brief: 1,
   angles: 2,
-  variants: 3,
-  detail: 4,
+  preview: 3,
+  variants: 4,
+  detail: 5,
 }
 
-// Pipeline progress.stage → the visual column it lights up.
-const progressColumn: Record<PipelineProgress['stage'], Stage> = {
-  analyzing: 'brief',
-  angles: 'angles',
-  editors: 'variants',
-  compiling: 'variants',
+// Pipeline progress.stage → the visual column it lights up. Note the
+// editors-stage tick lights up either "План" or "Варианты" depending on
+// whether we're in the preview substep — we route by the current UI step.
+const progressColumn = (
+  p: PipelineProgress,
+  step: Step,
+): Stage => {
+  if (p.stage === 'analyzing') return 'brief'
+  if (p.stage === 'angles') return 'angles'
+  if (p.stage === 'compiling') return 'variants'
+  // editors-stage callback is shared by preview + editors pipelines.
+  return step === 'preview' ? 'preview' : 'variants'
 }
 
 const stateOf = (stage: Stage): 'done' | 'running' | 'active' | 'pending' => {
   const stageOrdinal: Record<Stage, number> = {
     brief: 1,
     angles: 2,
-    variants: 3,
-    result: 4,
+    preview: 3,
+    variants: 4,
+    result: 5,
   }
   const here = stageOrdinal[stage]
   const now = stepOrder[props.step]
-  const running = progress.value && progressColumn[progress.value.stage] === stage
+  const running = progress.value && progressColumn(progress.value, props.step) === stage
   if (running) return 'running'
   if (now > here) return 'done'
   if (now === here) return 'active'
@@ -61,7 +70,8 @@ const stateOf = (stage: Stage): 'done' | 'running' | 'active' | 'pending' => {
 }
 
 const ratio = (stage: Stage): number => {
-  if (!progress.value || progressColumn[progress.value.stage] !== stage) return 0
+  if (!progress.value) return 0
+  if (progressColumn(progress.value, props.step) !== stage) return 0
   if (progress.value.total <= 0) return 0
   return Math.min(1, progress.value.current / progress.value.total)
 }

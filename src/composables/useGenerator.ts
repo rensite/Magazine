@@ -7,6 +7,7 @@ import { useGeneratorStore } from '@/stores/generatorStore'
 import { runAnalyst, analyzeImageLocally } from '@/generator/analyst'
 import { generateAngles } from '@/generator/angles'
 import { runEditorsForAngles } from '@/generator/editors'
+import { generateAnglePreviewsForAngles } from '@/generator/preview'
 import { compile, validate } from '@/generator/layout'
 import type {
   Brief,
@@ -192,6 +193,63 @@ export const useGenerator = () => {
   }
 
   /**
+   * Stage 3.5: produce a block-by-block outline ("preview") for each
+   * selected angle. Cheap synopsis — gives the user a concrete plan to
+   * review before committing to the full editor pass on stage 4.
+   */
+  const runAnglePreviews = async (uiLanguage = 'ru'): Promise<void> => {
+    if (!store.session?.brief || !store.session.angles) {
+      throw new Error('Brief/angles not ready')
+    }
+    store.setError(null)
+    store.setStatus('previewing')
+    const ctrl = new AbortController()
+    abortController.value = ctrl
+    try {
+      const brief = store.session.brief as Brief
+      const angles = store.session.angles as StoryAngle[]
+      const selected = angles.filter((a) => store.session!.selectedAngleIds.includes(a.id))
+      store.setProgress({
+        stage: 'editors',
+        label: 'Готовим план',
+        current: 0,
+        total: Math.max(selected.length, 1),
+      })
+      const results = await generateAnglePreviewsForAngles(
+        brief,
+        selected,
+        uiLanguage,
+        ctrl.signal,
+        (done, total) => store.setProgress({
+          stage: 'editors',
+          label: 'Готовим план',
+          current: done,
+          total,
+        }),
+      )
+      const errors: string[] = []
+      for (const r of results) {
+        if (r.preview) {
+          store.setAnglePreview(r.angleId, r.preview)
+        } else if (r.error) {
+          errors.push(`${r.angleId}: ${r.error}`)
+        }
+      }
+      store.setStatus('previews-ready')
+      if (errors.length > 0 && results.every((r) => !r.preview)) {
+        store.setError(`Все превью упали: ${errors.join(' · ')}`)
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') throw err
+      store.setError(err instanceof Error ? err.message : String(err))
+      throw err
+    } finally {
+      store.setProgress(null)
+      abortController.value = null
+    }
+  }
+
+  /**
    * Steps 4 + 5: run editors for the selected angles, compile each partitura
    * into a SpreadSchema, validate, and return the bundle.
    */
@@ -289,6 +347,7 @@ export const useGenerator = () => {
     addInlineText,
     runAnalysis,
     runAngles,
+    runAnglePreviews,
     runEditorsAndCompile,
   }
 }
