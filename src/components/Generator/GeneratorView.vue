@@ -221,10 +221,19 @@ const mediaLabel = (id?: string): string => {
 // ---------- Step 4: variants ----------
 interface VariantDetail {
   output?: { gaps: Gap[]; editorialNotes: string; selection: { droppedTextSections: Array<{ id: string; reason: string }>; droppedMedia: Array<{ id: string; reason: string }> } }
+  /** Multiple compositions produced from the same partitura via seed shuffle. */
+  schemas?: unknown[]
+  /** Legacy single-schema field — old sessions may still have this. */
   schema?: unknown
   issues?: Array<{ message: string; severity: string }>
   /** Set by the pipeline when this angle's editor failed. */
   error?: string
+}
+// Migrate legacy `schema` → `schemas[0]` on read so old persisted sessions keep working.
+const schemaListOf = (d: VariantDetail): unknown[] => {
+  if (Array.isArray(d.schemas) && d.schemas.length > 0) return d.schemas
+  if (d.schema) return [d.schema]
+  return []
 }
 const variants = computed(() => {
   const v = (store.session?.variants ?? {}) as Record<string, VariantDetail>
@@ -557,10 +566,13 @@ const openVariantInEditor = (angleId: string, schema: unknown) => {
       <!-- Step 5: variants -->
       <section v-else-if="step === 'variants'" class="max-w-6xl">
         <h2 class="mb-4 font-serif text-2xl">Варианты разворота</h2>
+        <p class="mb-6 text-xs text-ink-400">
+          На каждый угол — несколько компоновок одной и той же партитуры. Клик по миниатюре открывает её в редакторе.
+        </p>
         <div v-if="variants.length === 0 && gen.isWorking.value" class="text-sm text-ink-400">
           Редакторы пишут…
         </div>
-        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div class="space-y-8">
           <article
             v-for="v in variants"
             :key="v.angleId"
@@ -571,14 +583,13 @@ const openVariantInEditor = (angleId: string, schema: unknown) => {
           >
             <!-- Error slot: editor (or compile) failed for this angle -->
             <template v-if="v.error">
-              <div class="flex h-[180px] items-center justify-center rounded bg-red-950/30 text-xs text-red-300/80">
+              <header class="mb-2">
+                <p class="font-serif text-lg">{{ v.angle?.title }}</p>
+                <p class="text-xs text-ink-400">{{ v.angle?.oneliner }}</p>
+              </header>
+              <div class="flex h-[140px] items-center justify-center rounded bg-red-950/30 text-xs text-red-300/80">
                 Редактор не справился
               </div>
-              <p class="mt-3 font-serif text-lg">{{ v.angle?.title }}</p>
-              <p class="text-xs text-ink-400">{{ v.angle?.oneliner }}</p>
-              <p class="mt-2 text-[10px] uppercase tracking-wide text-ink-500">
-                {{ v.angle?.recommendedEditor }}
-              </p>
               <p class="mt-2 break-words text-[11px] text-red-300/80">{{ v.error }}</p>
               <div class="mt-3 flex gap-2">
                 <button
@@ -589,30 +600,38 @@ const openVariantInEditor = (angleId: string, schema: unknown) => {
               </div>
             </template>
 
-            <!-- Success slot -->
+            <!-- Success slot: grid of compositions -->
             <template v-else>
-              <SpreadPreview
-                v-if="v.schema"
-                :schema="v.schema"
-                :width="300"
-                :height="180"
-              />
-              <p class="mt-3 font-serif text-lg">{{ v.angle?.title }}</p>
-              <p class="text-xs text-ink-400">{{ v.angle?.oneliner }}</p>
-              <p class="mt-2 text-[10px] uppercase tracking-wide text-ink-500">
-                {{ v.angle?.recommendedEditor }}
-              </p>
-              <p v-if="v.output?.editorialNotes" class="mt-2 text-xs italic text-ink-300">
-                {{ v.output.editorialNotes }}
-              </p>
-              <p v-if="v.issues?.length" class="mt-2 text-[11px] text-yellow-300/80">
-                {{ v.issues.length }} замечание(й) валидатора
-              </p>
-              <div class="mt-3 flex gap-2">
+              <header class="mb-3 flex items-baseline justify-between gap-4">
+                <div>
+                  <p class="font-serif text-lg">{{ v.angle?.title }}</p>
+                  <p class="text-xs text-ink-400">{{ v.angle?.oneliner }}</p>
+                </div>
+                <span class="text-[10px] uppercase tracking-wide text-ink-500">
+                  {{ v.angle?.recommendedEditor }} · {{ schemaListOf(v).length }} компоновок
+                </span>
+              </header>
+              <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
                 <button
-                  class="rounded bg-gold px-3 py-1 text-xs text-ink-900 hover:opacity-90"
-                  @click="openVariantInEditor(v.angleId, v.schema)"
-                >Открыть в редакторе</button>
+                  v-for="(s, i) in schemaListOf(v)"
+                  :key="`${v.angleId}-${i}`"
+                  class="group relative overflow-hidden rounded border border-ink-700 bg-ink-900/40 transition hover:border-gold focus:border-gold focus:outline-none"
+                  @click="openVariantInEditor(v.angleId, s)"
+                  :title="`Компоновка ${i + 1} · открыть в редакторе`"
+                >
+                  <SpreadPreview :schema="s" :width="220" :height="140" />
+                  <span class="absolute bottom-1 right-1 rounded bg-ink-900/80 px-1.5 py-0.5 text-[10px] text-ink-200">
+                    #{{ i + 1 }}
+                  </span>
+                </button>
+              </div>
+              <div class="mt-3 flex items-center gap-3">
+                <p v-if="v.output?.editorialNotes" class="flex-1 text-xs italic text-ink-300">
+                  {{ v.output.editorialNotes }}
+                </p>
+                <p v-if="v.issues?.length" class="text-[11px] text-yellow-300/80">
+                  {{ v.issues.length }} замечание(й) валидатора
+                </p>
                 <button
                   class="rounded bg-ink-700 px-3 py-1 text-xs hover:bg-ink-600"
                   @click="focusedAngleId = v.angleId; step = 'detail'"
@@ -717,8 +736,8 @@ const openVariantInEditor = (angleId: string, schema: unknown) => {
           <button class="rounded bg-ink-700 px-3 py-1.5 text-sm hover:bg-ink-600" @click="step = 'variants'">← К вариантам</button>
           <button
             class="rounded bg-gold px-4 py-2 text-sm text-ink-900 hover:opacity-90"
-            @click="openVariantInEditor(focused.angleId, focused.schema)"
-          >Открыть этот вариант →</button>
+            @click="openVariantInEditor(focused.angleId, schemaListOf(focused)[0])"
+          >Открыть первую компоновку →</button>
         </div>
       </section>
     </main>

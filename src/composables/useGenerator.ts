@@ -31,9 +31,13 @@ export interface ImageUploadInput {
 export interface CompiledVariant {
   angleId: string
   output: EditorOutput
-  schema: SpreadSchema
+  /** Multiple compile passes of the same partitura, varied by seed, so the user gets a grid to choose from. */
+  schemas: SpreadSchema[]
   issues: ValidationIssue[]
 }
+
+/** Number of layout compositions generated per angle (same partitura, different seeds). */
+const COMPOSITIONS_PER_ANGLE = 6
 
 export const useGenerator = () => {
   const store = useGeneratorStore()
@@ -305,18 +309,29 @@ export const useGenerator = () => {
           store.bumpProgress()
           continue
         }
-        const schema = compile({ brief, output: r.output })
-        const validation = validate(schema, { autoCorrect: true })
+        // Compile the same partitura with N different seeds so the user
+        // gets a grid of compositions per angle, not a single take-it-or-leave-it.
+        // Issues from the first pass are representative — re-validating
+        // every seed would be noisy and the schema differences are visual,
+        // not structural.
+        const schemas: SpreadSchema[] = []
+        let firstIssues: ValidationIssue[] = []
+        for (let i = 0; i < COMPOSITIONS_PER_ANGLE; i++) {
+          const schema = compile({ brief, output: r.output, seed: `${r.angleId}#${i}` })
+          const validation = validate(schema, { autoCorrect: true })
+          schemas.push(validation.schema)
+          if (i === 0) firstIssues = validation.issues
+        }
         variants.push({
           angleId: r.angleId,
           output: r.output,
-          schema: validation.schema,
-          issues: validation.issues,
+          schemas,
+          issues: firstIssues,
         })
         store.setVariant(r.angleId, {
           output: r.output,
-          schema: validation.schema,
-          issues: validation.issues,
+          schemas,
+          issues: firstIssues,
         })
         store.bumpProgress()
       }
